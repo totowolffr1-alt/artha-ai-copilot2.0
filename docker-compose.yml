@@ -1,0 +1,20 @@
+version: "3.9"
+
+# Not required to run the app today — Phase 3 (Database Layer) is design-doc
+# only in the current project, no migrations or schema exist yet. This is
+# here so Postgres/TimescaleDB is one command away once that phase is built.
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: artha
+      POSTGRES_PASSWORD: artha_dev
+      POSTGRES_DB: artha
+    ports:
+      - "5432:5432"
+    volumes:
+      - artha_pgdata:/var/lib/postgresql/data
+
+volumes:
+  artha_pgdata:

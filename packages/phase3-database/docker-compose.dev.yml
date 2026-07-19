@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: artha
+    ports:
+      - "5432:5432"
+    volumes:
+      - artha_pgdata_dev:/var/lib/postgresql/data
+
+volumes:
+  artha_pgdata_dev:

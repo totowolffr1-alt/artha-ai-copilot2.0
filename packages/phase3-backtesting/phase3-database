@@ -1,0 +1,1164 @@
+# Artha AI — Phase 3 Database Architecture
+
+**Document type:** Architecture reference  
+**Status:** Complete — Approved  
+**Phases covered:** 3A through 3G  
+**Depends on:** Phase 2 (AngelOne SmartAPI adapter)  
+**Feeds into:** Phase 4 (Backtesting Engine), Phase 5 (Signal Engine)
+
+---
+
+## Executive Summary
+
+Phase 3 designs the complete database architecture for Artha AI — a professional algorithmic trading copilot targeting Indian markets (NSE/BSE equities, NFO futures and options, MCX commodities). The architecture spans six functional modules: market data, trading pipeline, portfolio management, learning engine, operational infrastructure, and security/audit.
+
+PostgreSQL with TimescaleDB is the chosen database engine. All design decisions are production-grade, optimised for Indian market trading workloads (50K ticks/s peak, IST timezone enforcement, NSE/NFO segment-specific cost and margin rules).
+
+The Phase 3 architecture is fully approved and frozen. No modifications are permitted without a formal amendment document. Phase 4 (Backtesting Engine) and Phase 5 (Signal Engine) consume this schema as-built.
+
+---
+
+## Database Architecture
+
+### Technology choice: PostgreSQL + TimescaleDB
+
+PostgreSQL was selected as the sole database engine. The rationale:
+
+**ACID correctness** — real-money trading requires transactional integrity. A tick written half-way, an order committed without its execution leg, or a position balance that drifts are all catastrophic. PostgreSQL's full ACID guarantees are non-negotiable.
+
+**Native JSONB** — semi-structured broker payloads (symbol master snapshots, strategy parameter blobs, feature vectors) stored without a separate document store. No impedance mismatch.
+
+**TIMESTAMPTZ** — handles IST↔UTC conversion correctly at the storage layer. All timestamps stored UTC; all IST display logic lives in the application layer.
+
+**TimescaleDB extension** — turns `ticks` and `candles` into proper time-series tables with automatic chunk management, continuous aggregates, and compression. No additional time-series database needed — one operational model throughout.
+
+**Partial indexes** — hot-path queries on `status IN ('open','partial')` use tiny partial indexes, not full table scans.
+
+**pg_partman + pg_cron** — partition management and scheduled jobs (compression, archival, metrics recomputation, instrument master sync) without external infrastructure.
+
+**One database, one operational model.** No Redis, no MongoDB, no InfluxDB. Reduces operational complexity for a solo/small-team trading system.
+
+### Six-module ownership model
+
+Each module owns its data. No cross-module foreign keys except through the audit log. Module boundaries established in Phase 3A and honoured throughout 3B–3G.
+
+| Module | Tables | Write volume |
+|---|---|---|
+| Market data | `symbols`, `ticks`, `candles`, `option_chain_snapshots`, `option_strikes` | Very high (ticks: ~50K rows/s peak) |
+| Session state | `broker_sessions`, `active_subscriptions` (unlogged) | Medium (rebuilt on reconnect) |
+| Trading pipeline | `signals`, `trades`, `orders`, `executions` | Low–medium |
+| Portfolio | `accounts`, `portfolios`, `positions`, `equity_curve`, `performance_metrics` | Low–medium |
+| Learning engine | `learning_records`, `strategy_performance`, `indicator_performance`, `regime_performance` | Low (batch, EOD) |
+| Audit | `audit_log` | Mirrors all mutations |
+
+### Tier model
+
+**Hot layer** — `ticks`, `candles`, `broker_sessions`, `active_subscriptions`. High write volume, low latency reads required.
+
+**Cold layer** — `trades`, `orders`, `executions`, `positions`, `learning_records`, `performance_metrics`. Relational, ACID-critical, lower write volume.
+
+**TimescaleDB layer** — `ticks`, `candles`, `equity_curve` (1m grain). Time-series semantics, chunk-based compression and retention.
+
+---
+
+## Data Flow
+
+### Tick ingestion flow
+
+```
+AngelOne WebSocket (SmartAPI WS 2.0 binary protocol)
+  → BinaryDecoder (Phase 2C) — paise → rupees, IST timestamp
+  → Normalizer (Phase 2C) — canonical ticker, crossed-spread guard
+  → TickEvent on EventBus
+  → CandleAggregator — rolls ticks into 1m candles
+  → ticks table (TimescaleDB hypertable, async batch insert)
+  → candles table (continuous aggregate from ticks + REST backfill)
+```
+
+### Signal-to-execution flow
+
+```
+BarEvent (from candles) → SignalEngine → signals table
+  → RiskValidationPipeline (6 stages)
+  → orders table (placed)
+  → AngelOne REST API (live) / OrderSimulator (backtest/paper)
+  → executions table (fill confirmed)
+  → trades table (status updated)
+  → positions table (MTM updated)
+  → equity_curve table (bar-close point)
+  → learning_records table (on trade close)
+```
+
+### Learning data flow
+
+```
+trades.status = 'closed'
+  → learning_records written (atomic, same transaction)
+  → pg_cron EOD 18:30 IST
+      → strategy_performance (GROUP BY strategy_run_id, regime)
+      → indicator_performance (unpack features_at_entry JSONB)
+      → regime_performance (GROUP BY regime, timeframe, symbol_id)
+  → signal engine reads regime_fitness + indicator_rankings
+  → next signal fires with recalibrated weights
+```
+
+---
+
+## Market Data Schema (Phase 3B)
+
+### `symbols`
+
+Central registry. All other tables FK here. One row per tradable instrument.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `symbol_id` | `uuid` PK | `gen_random_uuid()` | |
+| `ticker` | `varchar(50)` NOT NULL | | Canonical — `-EQ` suffix stripped |
+| `name` | `varchar(200)` | | Full instrument name |
+| `exchange` | `exchange_t` NOT NULL | | Enum: `NSE`, `BSE`, `NFO`, `BFO`, `MCX`, `CDS` |
+| `asset_type` | `asset_type` NOT NULL | | Enum: `equity`, `futures`, `options`, `etf`, `index`, `currency`, `commodity` |
+| `lot_size` | `numeric(12,0)` NOT NULL | DEFAULT 1 | Always 1 for equities |
+| `tick_size` | `numeric(8,4)` NOT NULL | DEFAULT 0.05 | Minimum price increment in rupees |
+| `isin` | `varchar(12)` | nullable | NSE/BSE ISIN |
+| `broker_token` | `varchar(20)` | nullable | SmartAPI numeric token string |
+| `broker_exch_type` | `smallint` | | SmartAPI exchange type code (1–13) |
+| `is_active` | `boolean` NOT NULL | DEFAULT true | Soft-delete |
+| `created_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+| `updated_at` | `timestamptz` NOT NULL | DEFAULT `now()` | Updated on instrument master sync |
+
+**Indexes:** unique on `(exchange, ticker)`, unique on `broker_token` where NOT NULL, partial btree on `is_active = true`.
+
+---
+
+### `ticks`
+
+TimescaleDB hypertable. Partitioned by `exchange_ts`, 1-day chunks.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `tick_id` | `uuid` NOT NULL | | Not surrogate PK — partition PK is `(symbol_id, exchange_ts)` |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` (NOT VALID) | FK validated nightly, not at insert |
+| `exchange_ts` | `timestamptz` NOT NULL | Partition key | Unix ms from exchange, stored UTC |
+| `received_ts` | `timestamptz` NOT NULL | DEFAULT `now()` | Adapter wall-clock write time |
+| `price` | `numeric(12,2)` NOT NULL | | LTP in rupees |
+| `volume` | `bigint` NOT NULL | | Cumulative day volume at this tick |
+| `bid` | `numeric(12,2)` | nullable | NULL if crossed or absent |
+| `ask` | `numeric(12,2)` | nullable | NULL if crossed or absent |
+| `open_price` | `numeric(12,2)` | nullable | Day open at tick time |
+| `high_price` | `numeric(12,2)` | nullable | Day high at tick time |
+| `low_price` | `numeric(12,2)` | nullable | Day low at tick time |
+| `avg_traded_price` | `numeric(12,2)` | nullable | VWAP proxy from exchange |
+| `total_buy_qty` | `bigint` | nullable | Aggregate buy-side quantity |
+| `total_sell_qty` | `bigint` | nullable | Aggregate sell-side quantity |
+| `session_id` | `varchar(36)` | | WS session that wrote this tick |
+
+**Constraints:** `CHECK (bid IS NULL OR ask IS NULL OR bid < ask)` — crossed spread rejected at DB level.
+
+**TimescaleDB policies:** compress after 7 days (`segmentby symbol_id`, `orderby exchange_ts`); drop after 90 days.
+
+**Write optimisations:** `synchronous_commit = off` for tick writer connection only (ticks are reconstructible); FK declared `NOT VALID`, validated nightly; batch insert via COPY protocol.
+
+---
+
+### `candles`
+
+TimescaleDB hypertable. Partitioned by `(timeframe, bucket_ts)`.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `candle_id` | `uuid` NOT NULL | | |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` | |
+| `bucket_ts` | `timestamptz` NOT NULL | Partition key | Start of candle interval, UTC |
+| `timeframe` | `timeframe_t` NOT NULL | | Enum: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w` |
+| `open` | `numeric(12,2)` NOT NULL | | Rupees |
+| `high` | `numeric(12,2)` NOT NULL | | |
+| `low` | `numeric(12,2)` NOT NULL | | |
+| `close` | `numeric(12,2)` NOT NULL | | |
+| `volume` | `bigint` NOT NULL | | |
+| `vwap` | `numeric(12,2)` | nullable | Computed from tick delta-volume |
+| `delta_volume` | `bigint` | nullable | `total_buy_qty - total_sell_qty` aggregate |
+| `tick_count` | `int` | | Number of source ticks in this candle |
+| `state` | `candle_st` NOT NULL | | Enum: `partial`, `closed` |
+| `is_partial` | `boolean` NOT NULL | DEFAULT false | Redundant with `state`, kept for fast filter |
+
+**Constraints:** `CHECK (high >= low)`, `CHECK (high >= open AND high >= close)`, `CHECK (low <= open AND low <= close)`.
+
+**Unique constraint:** `(symbol_id, timeframe, bucket_ts)` — upsert on conflict promotes partial → closed.
+
+**TimescaleDB:** compress after 30 days; never drop (historical candles retained permanently).
+
+---
+
+### `option_chain_snapshots`
+
+Point-in-time capture of a full option chain for one underlying.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `snapshot_id` | `uuid` PK | | |
+| `underlying_id` | `uuid` NOT NULL | FK → `symbols` | Index or equity being optioned |
+| `captured_at` | `timestamptz` NOT NULL | | UTC. Partition key if promoted to hypertable |
+| `expiry` | `date` NOT NULL | | NSE weekly/monthly expiry date |
+| `underlying_price` | `numeric(12,2)` NOT NULL | | Spot price at capture time |
+| `atm_iv` | `numeric(8,4)` | nullable | ATM implied volatility |
+| `chain_pcr` | `numeric(8,4)` | nullable | True chain PCR: total PE OI / total CE OI |
+
+**Index:** btree on `(underlying_id, expiry, captured_at DESC)`.
+
+**Note:** `chain_pcr` added per Phase 3G M7 correction. Per-strike PCR renamed to `strike_pcr` in `option_strikes`.
+
+---
+
+### `option_strikes`
+
+Per-strike rows belonging to an `option_chain_snapshots` record.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `strike_id` | `uuid` PK | | |
+| `snapshot_id` | `uuid` NOT NULL | FK → `option_chain_snapshots` CASCADE | |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` | The option contract itself |
+| `strike_price` | `numeric(12,2)` NOT NULL | CHECK > 0 | In rupees |
+| `option_type` | `varchar(2)` NOT NULL | CHECK IN ('CE','PE') | |
+| `ltp` | `numeric(12,2)` | nullable | Last traded price |
+| `iv` | `numeric(8,4)` | nullable | Implied volatility |
+| `delta` | `numeric(8,6)` | nullable | CE ∈ (0,1), PE ∈ (-1,0) |
+| `gamma` | `numeric(10,8)` | nullable | |
+| `theta` | `numeric(10,6)` | nullable | Rupees per day |
+| `vega` | `numeric(10,6)` | nullable | Rupees per 1% IV move |
+| `oi` | `bigint` | nullable | Open interest in contracts |
+| `oi_change` | `bigint` | nullable | OI delta from previous snapshot |
+| `volume` | `bigint` | nullable | Contracts traded today |
+| `bid` | `numeric(12,2)` | nullable | |
+| `ask` | `numeric(12,2)` | nullable | |
+| `bid_qty` | `numeric(12,0)` | nullable | |
+| `ask_qty` | `numeric(12,0)` | nullable | |
+| `strike_pcr` | `numeric(8,4)` | nullable | Per-strike PCR: `PE_oi / CE_oi` |
+
+---
+
+## Signal Schema (Phase 3C)
+
+### `signals`
+
+Output of the signal engine. One row per signal fired. Decoupled from trades.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `signal_id` | `uuid` PK | | |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` | |
+| `strategy_run_id` | `uuid` | FK → `strategy_runs` | NULL for manual signals |
+| `signal_type` | `varchar(30)` NOT NULL | | e.g. `momentum_breakout`, `mean_reversion` |
+| `direction` | `varchar(5)` NOT NULL | CHECK IN ('LONG','SHORT') | |
+| `strength` | `numeric(6,4)` NOT NULL | CHECK BETWEEN 0 AND 1 | Normalised 0–1 score |
+| `entry_price_hint` | `numeric(12,2)` | nullable | Suggested entry; informational only |
+| `stop_loss` | `numeric(12,2)` | nullable | Absolute price level |
+| `take_profit` | `numeric(12,2)` | nullable | Absolute price level |
+| `kelly_fraction` | `numeric(6,4)` | CHECK > 0 AND <= 1 | Kelly-scaled position size fraction |
+| `regime` | `varchar(30)` | nullable | Detected regime at signal time |
+| `features` | `jsonb` | | Raw feature vector snapshot |
+| `status` | `signal_st` NOT NULL | | Enum: `pending`, `acted`, `expired`, `rejected`, `cancelled` |
+| `fired_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+| `expires_at` | `timestamptz` | nullable | `pg_cron` flips pending → expired past this |
+| `acted_at` | `timestamptz` | nullable | Set when first trade created |
+| `acted_by_trade` | `uuid` | FK → `trades` | Denormalised link |
+
+**Indexes:**
+```
+btree  (symbol_id, fired_at DESC)
+btree  (strategy_run_id, fired_at DESC)
+partial btree (status) WHERE status = 'pending'
+btree  (expires_at) WHERE status = 'pending'
+```
+
+---
+
+## Trade Schema (Phase 3C)
+
+### `trades`
+
+Logical trade — full lifecycle from intent to close. Atomic unit for P&L accounting.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `trade_id` | `uuid` PK | | |
+| `signal_id` | `uuid` | FK → `signals` | NULL for manual trades |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` | |
+| `account_id` | `uuid` NOT NULL | FK → `accounts` | Multi-account isolation |
+| `mode` | `varchar(10)` NOT NULL | CHECK IN ('live','paper','backtest') | |
+| `direction` | `varchar(5)` NOT NULL | CHECK IN ('LONG','SHORT') | |
+| `qty` | `numeric(12,0)` NOT NULL | CHECK > 0 | Target quantity |
+| `filled_qty` | `numeric(12,0)` NOT NULL | DEFAULT 0 | Aggregate across entry executions |
+| `avg_entry_price` | `numeric(12,2)` | nullable | Computed on close/partial fill |
+| `avg_exit_price` | `numeric(12,2)` | nullable | Computed on close |
+| `realised_pnl` | `numeric(14,2)` | nullable | Rupees. Populated on close |
+| `commission` | `numeric(10,2)` NOT NULL | DEFAULT 0 | Sum of execution commissions |
+| `slippage` | `numeric(10,2)` | nullable | Entry price deviation from signal hint |
+| `close_reason` | `varchar(30)` | nullable | `sl_triggered`, `target_hit`, `timeout_exit`, `forced_exit`, `fold_boundary_exit` |
+| `status` | `trade_st` NOT NULL | | Enum: `pending`, `open`, `partial`, `closed`, `cancelled`, `rejected` |
+| `opened_at` | `timestamptz` | nullable | Set on first fill |
+| `closed_at` | `timestamptz` | nullable | Set when `status = closed` |
+| `updated_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+
+**Note:** `close_reason` field added per Phase 4H Correction 1 (migration `016_close_reason.sql`).
+
+**Indexes:**
+```
+btree  (account_id, status, opened_at DESC)
+btree  (symbol_id, mode, status)
+btree  (signal_id)
+partial btree (status) WHERE status IN ('open','partial')
+btree  (opened_at DESC)
+```
+
+---
+
+### `orders`
+
+Broker-facing order. One trade has minimum one entry order; typically also SL and TP orders.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `order_id` | `uuid` PK | | Internal ID |
+| `trade_id` | `uuid` NOT NULL | FK → `trades` | |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` | Denormalised for reconciliation |
+| `broker_order_id` | `varchar(50)` | nullable, unique where NOT NULL | SmartAPI order ID |
+| `order_type` | `varchar(10)` NOT NULL | CHECK IN ('MARKET','LIMIT','SL','SL-M') | |
+| `direction` | `varchar(5)` NOT NULL | CHECK IN ('BUY','SELL') | |
+| `qty` | `numeric(12,0)` NOT NULL | CHECK > 0 | |
+| `price` | `numeric(12,2)` | nullable | NULL for MARKET orders |
+| `trigger_price` | `numeric(12,2)` | nullable | Required for SL, SL-M |
+| `product_type` | `varchar(10)` NOT NULL | | `CNC`, `MIS`, `NRML` |
+| `validity` | `varchar(5)` NOT NULL | DEFAULT 'DAY' | `DAY`, `IOC`, `GTD` |
+| `status` | `order_st` NOT NULL | | Enum: `pending`, `placed`, `open`, `partial`, `complete`, `cancelled`, `rejected` |
+| `reject_reason` | `varchar(500)` | nullable | Broker rejection message verbatim |
+| `placed_at` | `timestamptz` | nullable | Set when sent to broker |
+| `updated_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+
+**Indexes:**
+```
+btree  (trade_id, placed_at)
+unique btree (broker_order_id) WHERE broker_order_id IS NOT NULL
+partial btree (status) WHERE status IN ('pending','placed','open','partial')
+btree  (symbol_id, placed_at DESC)
+```
+
+---
+
+### `executions`
+
+Immutable fill record. Never updated after insert. Append-only source of truth.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `execution_id` | `uuid` PK | | |
+| `order_id` | `uuid` NOT NULL | FK → `orders` | |
+| `trade_id` | `uuid` NOT NULL | FK → `trades` | Denormalised — avoids joins on P&L path |
+| `broker_fill_id` | `varchar(50)` | UNIQUE | Dedup guard |
+| `fill_qty` | `numeric(12,0)` NOT NULL | CHECK > 0 | |
+| `fill_price` | `numeric(12,2)` NOT NULL | CHECK > 0 | Actual execution price in rupees |
+| `commission` | `numeric(10,4)` NOT NULL | DEFAULT 0, CHECK >= 0 | All charges for this fill |
+| `exchange_seg` | `varchar(10)` | | `NSE`, `BSE`, `NFO`, `MCX` |
+| `exchange_ts` | `timestamptz` | nullable | Exchange-confirmed fill timestamp |
+| `received_ts` | `timestamptz` NOT NULL | DEFAULT `now()` | Adapter write time |
+
+**Indexes:**
+```
+btree  (trade_id, exchange_ts)
+btree  (order_id)
+unique btree (broker_fill_id)
+btree  (received_ts DESC)
+```
+
+**Enforcement:** append-only enforced at application layer (no UPDATE/DELETE grants to app role).
+
+---
+
+### Enum types (Phase 3C)
+
+```
+signal_st  : pending | acted | expired | rejected | cancelled
+trade_st   : pending | open  | partial | closed   | cancelled | rejected
+order_st   : pending | placed | open   | partial  | complete  | cancelled | rejected
+```
+
+---
+
+## Portfolio Schema (Phase 3D)
+
+### `accounts`
+
+Root of ownership hierarchy. One account per broker connection.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `account_id` | `uuid` PK | | |
+| `broker_client_id` | `varchar(20)` NOT NULL | UNIQUE per broker | SmartAPI `clientId` |
+| `broker_name` | `varchar(30)` NOT NULL | DEFAULT 'AngelOne' | Extensible for multi-broker |
+| `mode` | `varchar(10)` NOT NULL | CHECK IN ('live','paper','backtest') | |
+| `initial_capital` | `numeric(14,2)` NOT NULL | CHECK > 0 | Capital at creation |
+| `cash_balance` | `numeric(14,2)` NOT NULL | DEFAULT 0 | Current free cash |
+| `margin_used` | `numeric(14,2)` NOT NULL | DEFAULT 0 | Total margin blocked |
+| `is_active` | `boolean` NOT NULL | DEFAULT true | Soft-delete |
+| `created_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+| `updated_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+
+---
+
+### `portfolios`
+
+Snapshot of aggregate portfolio state. Updated on every trade close and equity curve tick.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `portfolio_id` | `uuid` PK | | |
+| `account_id` | `uuid` NOT NULL | FK → `accounts` | |
+| `name` | `varchar(100)` NOT NULL | | e.g. "Live — June 2026" |
+| `mode` | `varchar(10)` NOT NULL | | Mirrors account mode |
+| `allocated_capital` | `numeric(14,2)` NOT NULL | CHECK > 0 | |
+| `cash_available` | `numeric(14,2)` NOT NULL | DEFAULT 0 | |
+| `unrealised_pnl` | `numeric(14,2)` NOT NULL | DEFAULT 0 | |
+| `realised_pnl` | `numeric(14,2)` NOT NULL | DEFAULT 0 | Cumulative closed P&L |
+| `total_value` | `numeric(14,2)` NOT NULL | | `cash_available + mtm_value` |
+| `drawdown_pct` | `numeric(8,4)` NOT NULL | DEFAULT 0, CHECK >= 0 | From peak |
+| `peak_value` | `numeric(14,2)` NOT NULL | | High-water mark. Never decremented |
+| `snapshot_at` | `timestamptz` NOT NULL | DEFAULT `now()` | Last aggregate computation |
+| `created_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+
+**Unique partial index:** `UNIQUE (account_id, mode) WHERE mode = 'live'` — one live portfolio per account.
+
+---
+
+### `positions`
+
+Trade-scoped. One row per open or closed position per trade. Not aggregated by symbol.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `position_id` | `uuid` PK | | |
+| `portfolio_id` | `uuid` NOT NULL | FK → `portfolios` | |
+| `symbol_id` | `uuid` NOT NULL | FK → `symbols` | |
+| `trade_id` | `uuid` NOT NULL | FK → `trades` | 1-to-1 with trade |
+| `direction` | `varchar(5)` NOT NULL | CHECK IN ('LONG','SHORT') | |
+| `qty` | `numeric(12,0)` NOT NULL | CHECK >= 0 | Decrements on partial exit |
+| `avg_cost` | `numeric(12,2)` NOT NULL | | Weighted average entry incl. commission |
+| `ltp` | `numeric(12,2)` | nullable | Last traded price |
+| `unrealised_pnl` | `numeric(14,2)` NOT NULL | DEFAULT 0 | |
+| `realised_pnl` | `numeric(14,2)` NOT NULL | DEFAULT 0 | From partial exits |
+| `mtm_value` | `numeric(14,2)` NOT NULL | DEFAULT 0 | `ltp × qty` |
+| `margin_blocked` | `numeric(12,2)` NOT NULL | DEFAULT 0 | |
+| `status` | `position_st` NOT NULL | | Enum: `open`, `partial`, `closed` |
+| `opened_at` | `timestamptz` NOT NULL | | From first execution `exchange_ts` |
+| `closed_at` | `timestamptz` | nullable | Set when `qty = 0` |
+| `updated_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+
+---
+
+### `equity_curve`
+
+TimescaleDB hypertable. Append-only time-series of portfolio value.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `point_id` | `uuid` NOT NULL | | Partition PK is `(portfolio_id, recorded_at)` |
+| `portfolio_id` | `uuid` NOT NULL | FK → `portfolios` | |
+| `recorded_at` | `timestamptz` NOT NULL | Partition key | UTC |
+| `equity` | `numeric(14,2)` NOT NULL | | Total portfolio value |
+| `cash` | `numeric(14,2)` NOT NULL | | Free cash component |
+| `unrealised_pnl` | `numeric(14,2)` NOT NULL | | |
+| `drawdown_pct` | `numeric(8,4)` NOT NULL | | From high-water mark |
+| `drawdown_abs` | `numeric(14,2)` NOT NULL | | Rupee drawdown from peak |
+| `open_positions` | `int` NOT NULL | DEFAULT 0 | |
+| `granularity` | `varchar(5)` NOT NULL | | `1m`, `5m`, `1h`, `1d` |
+
+**Written at two cadences:** on every trade open/close event (event-driven) and on scheduled tick matching primary timeframe (time-driven).
+
+**TimescaleDB:** compress after 7 days; drop 1m grain after 90 days; 1h aggregate retained 3 years; 1d aggregate permanent.
+
+---
+
+### `performance_metrics`
+
+Pre-computed summary statistics. One row per `(portfolio, period_type, period_start)`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `metric_id` | `uuid` PK | |
+| `portfolio_id` | `uuid` NOT NULL FK → `portfolios` | |
+| `strategy_run_id` | `uuid` FK → `strategy_runs` | NULL = whole-portfolio metrics |
+| `period_start` | `date` NOT NULL | Inclusive |
+| `period_end` | `date` NOT NULL | Inclusive |
+| `period_type` | `varchar(10)` NOT NULL | `daily`, `weekly`, `monthly`, `ytd`, `all_time`, `custom` |
+| `total_return_pct` | `numeric(10,4)` | |
+| `cagr_pct` | `numeric(10,4)` | NULL if period < 1 year |
+| `sharpe_ratio` | `numeric(8,4)` | RF = 6.5% RBI repo. NULL if < 30 trades |
+| `sortino_ratio` | `numeric(8,4)` | |
+| `calmar_ratio` | `numeric(8,4)` | NULL if drawdown = 0 |
+| `max_drawdown_pct` | `numeric(8,4)` NOT NULL | DEFAULT 0 |
+| `max_drawdown_abs` | `numeric(14,2)` NOT NULL | DEFAULT 0 |
+| `win_rate` | `numeric(6,4)` | |
+| `profit_factor` | `numeric(8,4)` | NULL if no losses |
+| `avg_win` | `numeric(12,2)` | |
+| `avg_loss` | `numeric(12,2)` | Stored as negative |
+| `expectancy` | `numeric(12,4)` | |
+| `avg_rrr` | `numeric(8,4)` | Average realised risk-reward ratio |
+| `total_trades` | `int` NOT NULL | DEFAULT 0 | Closed trades only |
+| `winning_trades` | `int` NOT NULL | DEFAULT 0 | |
+| `losing_trades` | `int` NOT NULL | DEFAULT 0 | |
+| `commission_total` | `numeric(12,2)` NOT NULL | DEFAULT 0 | |
+| `slippage_total` | `numeric(12,2)` NOT NULL | DEFAULT 0 | |
+| `computed_at` | `timestamptz` NOT NULL | DEFAULT `now()` | |
+
+**Unique constraint:** `UNIQUE (portfolio_id, strategy_run_id, period_type, period_start)` — safe upsert on recompute.
+
+---
+
+## Learning Engine Schema (Phase 3E)
+
+### `learning_records`
+
+Immutable raw training corpus. One row per closed trade. Written atomically on trade close. Never updated.
+
+| Field | Type | Notes |
+|---|---|---|
+| `record_id` | `uuid` PK | |
+| `trade_id` | `uuid` NOT NULL UNIQUE FK → `trades` | One learning record per closed trade |
+| `signal_id` | `uuid` FK → `signals` | NULL for manual trades |
+| `symbol_id` | `uuid` NOT NULL FK → `symbols` | Denormalised |
+| `regime` | `varchar(30)` NOT NULL | Regime at trade entry |
+| `features_at_entry` | `jsonb` NOT NULL | Full feature vector at entry. Never mutated |
+| `features_at_exit` | `jsonb` | Feature vector at exit |
+| `predicted_return` | `numeric(10,6)` | NULL if strategy doesn't predict |
+| `actual_return` | `numeric(10,6)` NOT NULL | Direction-signed fraction |
+| `prediction_error` | `numeric(10,6)` | `actual - predicted` |
+| `entry_price` | `numeric(12,2)` NOT NULL | `avg_entry_price` from trade |
+| `exit_price` | `numeric(12,2)` NOT NULL | `avg_exit_price` from trade |
+| `realised_pnl` | `numeric(14,2)` NOT NULL | Net after commission + slippage |
+| `mae` | `numeric(10,6)` NOT NULL | Max adverse excursion as entry fraction |
+| `mfe` | `numeric(10,6)` NOT NULL | Max favourable excursion as entry fraction |
+| `holding_bars` | `int` NOT NULL | Duration in primary-timeframe bars |
+| `was_winner` | `boolean` NOT NULL | `realised_pnl > 0` |
+| `kelly_used` | `numeric(6,4)` | `signals.kelly_fraction` at fire time |
+| `kelly_optimal` | `numeric(6,4)` | Post-hoc optimal Kelly |
+| `trade_opened_at` | `timestamptz` NOT NULL | |
+| `trade_closed_at` | `timestamptz` NOT NULL | |
+| `recorded_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+**Indexes:**
+```
+btree  (symbol_id, trade_closed_at DESC)
+btree  (regime, trade_closed_at DESC)
+btree  (was_winner, regime)
+partial btree (prediction_error) WHERE prediction_error IS NOT NULL
+```
+
+---
+
+### `strategy_performance`
+
+Aggregated win/loss stats per strategy run, sliced by regime and period. Signal engine reads `regime_fitness` for regime-conditional strategy weighting.
+
+| Field | Type | Notes |
+|---|---|---|
+| `perf_id` | `uuid` PK | |
+| `strategy_run_id` | `uuid` NOT NULL FK → `strategy_runs` | |
+| `symbol_id` | `uuid` FK → `symbols` | NULL = cross-symbol aggregate |
+| `regime` | `varchar(30)` NOT NULL | `'all'` = regime-agnostic |
+| `period_start` | `date` NOT NULL | |
+| `period_end` | `date` NOT NULL | |
+| `period_type` | `varchar(10)` NOT NULL | |
+| `total_signals` | `int` NOT NULL | DEFAULT 0 |
+| `acted_signals` | `int` NOT NULL | DEFAULT 0 |
+| `winning_trades` | `int` NOT NULL | DEFAULT 0 |
+| `losing_trades` | `int` NOT NULL | DEFAULT 0 |
+| `win_rate` | `numeric(6,4)` NOT NULL | DEFAULT 0 |
+| `avg_return_pct` | `numeric(10,4)` | |
+| `avg_mae` | `numeric(10,6)` | |
+| `avg_mfe` | `numeric(10,6)` | |
+| `avg_holding_bars` | `numeric(8,2)` | |
+| `sharpe_ratio` | `numeric(8,4)` | NULL if < 30 trades |
+| `profit_factor` | `numeric(8,4)` | NULL if no losses |
+| `kelly_accuracy` | `numeric(6,4)` | Correlation: `kelly_used` vs `kelly_optimal` |
+| `avg_prediction_error` | `numeric(10,6)` | Model calibration metric |
+| `regime_fitness` | `numeric(8,4)` | Composite score 0–1. Signal engine weighting key |
+| `computed_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+**Unique constraint:** `UNIQUE (strategy_run_id, symbol_id, regime, period_type, period_start)`.
+
+**Indexes:**
+```
+btree  (strategy_run_id, regime, period_type)
+btree  (regime_fitness DESC)
+btree  (symbol_id, regime, period_end DESC)
+```
+
+---
+
+### `indicator_performance`
+
+Measures predictive contribution of each indicator within a strategy run. Signal engine reads `information_ratio` to prune or re-weight indicators.
+
+| Field | Type | Notes |
+|---|---|---|
+| `indicator_perf_id` | `uuid` PK | |
+| `strategy_run_id` | `uuid` NOT NULL FK → `strategy_runs` | |
+| `indicator_name` | `varchar(50)` NOT NULL | e.g. `RSI`, `EMA_cross`, `ATR_band` |
+| `indicator_params` | `varchar(200)` NOT NULL | Serialised: `"period=14,src=close"` |
+| `regime` | `varchar(30)` NOT NULL | `'all'` = regime-agnostic |
+| `symbol_class` | `varchar(20)` NOT NULL | `equity`, `futures`, `options`, `index` |
+| `period_start` | `date` NOT NULL | |
+| `period_end` | `date` NOT NULL | |
+| `predictive_accuracy` | `numeric(6,4)` | 0.5 = random |
+| `signal_contribution` | `numeric(8,4)` | Partial correlation with `actual_return` |
+| `avg_lead_bars` | `numeric(6,2)` | Mean bars between trigger and entry |
+| `false_positive_rate` | `numeric(6,4)` | Indicator fired but trade lost |
+| `false_negative_rate` | `numeric(6,4)` | Indicator didn't fire but trade would have won |
+| `information_ratio` | `numeric(8,4)` | Primary pruning metric |
+| `sample_count` | `int` NOT NULL | DEFAULT 0. Unreliable below ~30 |
+| `computed_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+**Unique constraint:** `UNIQUE (strategy_run_id, indicator_name, indicator_params, regime, symbol_class, period_start)`.
+
+**Indexes:**
+```
+btree  (indicator_name, regime, period_end DESC)
+btree  (strategy_run_id, information_ratio DESC)
+btree  (regime, symbol_class, predictive_accuracy DESC)
+```
+
+---
+
+### `regime_performance`
+
+Characterises each regime label. Regime detector reads `indicator_rankings` to select features for next classification pass.
+
+| Field | Type | Notes |
+|---|---|---|
+| `regime_perf_id` | `uuid` PK | |
+| `symbol_id` | `uuid` FK → `symbols` | NULL = market-wide regime |
+| `regime` | `varchar(30)` NOT NULL | |
+| `timeframe` | `varchar(5)` NOT NULL | Regime is timeframe-relative |
+| `period_start` | `date` NOT NULL | |
+| `period_end` | `date` NOT NULL | |
+| `occurrence_count` | `int` NOT NULL | DEFAULT 0 |
+| `avg_duration_bars` | `numeric(8,2)` | Mean persistence before transition |
+| `avg_return_pct` | `numeric(10,4)` | Mean trade return during this regime |
+| `win_rate` | `numeric(6,4)` | |
+| `best_strategy` | `varchar(100)` | `strategy_run_id` with highest `regime_fitness` |
+| `worst_strategy` | `varchar(100)` | Lowest `regime_fitness` |
+| `avg_volatility` | `numeric(10,6)` | Mean ATR fraction during regime |
+| `avg_volume_ratio` | `numeric(8,4)` | Mean volume vs 20-bar average |
+| `indicator_rankings` | `jsonb` NOT NULL | Ordered `[{indicator_name, params, information_ratio}]` |
+| `computed_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+**Unique constraint:** `UNIQUE (symbol_id, regime, timeframe, period_start)`.
+
+**Indexes:**
+```
+btree  (regime, timeframe, period_end DESC)
+btree  (symbol_id, regime, timeframe)
+btree  (win_rate DESC, regime)
+```
+
+---
+
+## Missing Phase 3 Deliverables
+
+The following items were identified during Phase 3G audit as missing from the original Phase 3B–3F deliverables. All are required before Phase 4 implementation begins.
+
+### M1 — `strategy_runs` table (REQUIRED — Phase 4 blocker)
+
+Referenced by `strategy_performance.strategy_run_id`, `indicator_performance.strategy_run_id`, `performance_metrics.strategy_run_id`, and `signals.strategy_run_id` but never formally defined in any Phase 3 sub-phase.
+
+**Required schema (minimum):**
+
+| Field | Type | Notes |
+|---|---|---|
+| `strategy_run_id` | `uuid` PK | |
+| `strategy_id` | `varchar(100)` NOT NULL | Stable strategy identifier |
+| `strategy_version` | `int` NOT NULL | DEFAULT 1 |
+| `mode` | `varchar(10)` NOT NULL | `backtest`, `paper`, `live` |
+| `status` | `varchar(20)` NOT NULL | `pending`, `running`, `completed`, `failed`, `overfit` |
+| `parameter_snapshot` | `jsonb` NOT NULL | Full `ParameterSnapshot` — self-contained, reproducible |
+| `summary_metrics` | `jsonb` | Denormalised `all_time` metrics for dashboard access |
+| `reports_jsonb` | `jsonb` | Report data from Phase 4G ReportRegistry |
+| `walk_forward_fold` | `int` | NULL if not walk-forward |
+| `started_at` | `timestamptz` | |
+| `completed_at` | `timestamptz` | |
+| `error_message` | `text` | Populated on `status = failed` |
+| `created_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+**Migration:** `006_strategy_runs.sql` — must be created before `007_signals_trades.sql`.
+
+### M2 — `broker_sessions` and `active_subscriptions` unlogged tables (REQUIRED)
+
+Phase 3A defined a session state module of unlogged tables but never delivered the table definitions.
+
+**`broker_sessions` (unlogged):**
+
+| Field | Type | Notes |
+|---|---|---|
+| `session_id` | `uuid` PK | |
+| `account_id` | `uuid` NOT NULL FK → `accounts` | |
+| `access_token` | `text` NOT NULL | Encrypted via `pgp_sym_encrypt` (SEC1) |
+| `refresh_token` | `text` | Encrypted |
+| `feed_token` | `text` | Encrypted |
+| `expires_at` | `timestamptz` NOT NULL | |
+| `connected_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+**`active_subscriptions` (unlogged):**
+
+| Field | Type | Notes |
+|---|---|---|
+| `subscription_id` | `uuid` PK | |
+| `account_id` | `uuid` NOT NULL | |
+| `symbol_id` | `uuid` NOT NULL FK → `symbols` | |
+| `mode` | `smallint` NOT NULL | SmartAPI subscription mode (1/2/3) |
+| `subscribed_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+### M3 — `sync_log` table (REQUIRED)
+
+Instrument master sync runs nightly via `pg_cron`. No table exists to track sync status, row counts, or failures.
+
+**`sync_log`:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `sync_id` | `uuid` PK | |
+| `sync_type` | `varchar(30)` NOT NULL | `instrument_master`, `holiday_calendar` |
+| `started_at` | `timestamptz` NOT NULL | |
+| `completed_at` | `timestamptz` | |
+| `rows_upserted` | `int` | |
+| `rows_deactivated` | `int` | |
+| `status` | `varchar(20)` NOT NULL | `running`, `completed`, `failed` |
+| `error` | `text` | |
+
+### M4 — `risk_limits` table (REQUIRED — Phase 4E blocker)
+
+Phase 4E's `RiskValidationPipeline` reads from `risk_limits` at stages 1–6. No table definition exists in Phase 3.
+
+**`risk_limits`:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `limit_id` | `uuid` PK | |
+| `account_id` | `uuid` NOT NULL FK → `accounts` | |
+| `limit_type` | `varchar(50)` NOT NULL | e.g. `max_daily_loss`, `max_position_fraction` |
+| `limit_value` | `numeric(16,6)` NOT NULL | |
+| `is_active` | `boolean` NOT NULL | DEFAULT true |
+| `updated_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+### M5 — `audit_log` table (REQUIRED — SEC5)
+
+Phase 3A specified an append-only audit log with `pgcrypto` chain hashing. No table definition was delivered.
+
+**`audit_log`:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `audit_id` | `uuid` PK | |
+| `table_name` | `varchar(50)` NOT NULL | |
+| `operation` | `varchar(10)` NOT NULL | `INSERT`, `UPDATE` |
+| `row_id` | `uuid` NOT NULL | PK of mutated row |
+| `changed_by` | `varchar(100)` | Account ID or system process |
+| `old_values` | `jsonb` | NULL on INSERT |
+| `new_values` | `jsonb` NOT NULL | |
+| `chain_hash` | `text` NOT NULL | `pgcrypto` hash of (previous hash + new_values) |
+| `key_id` | `uuid` NOT NULL FK → `key_versions` | For key rotation |
+| `recorded_at` | `timestamptz` NOT NULL | DEFAULT `now()` |
+
+---
+
+## Indexing Strategy (Phase 3F)
+
+### Hot path indexes (sub-millisecond, market hours)
+
+```sql
+-- Active position lookup (fires on every tick for subscribed symbols)
+CREATE INDEX idx_positions_active
+  ON positions (symbol_id, portfolio_id)
+  WHERE status IN ('open', 'partial');
+
+-- Open order monitor (broker reconciliation loop ~500ms)
+CREATE INDEX idx_orders_open
+  ON orders (trade_id, placed_at)
+  WHERE status IN ('pending','placed','open','partial');
+
+-- Live trade lookup by account (position manager hot path)
+CREATE INDEX idx_trades_live
+  ON trades (account_id, status, opened_at DESC)
+  WHERE status IN ('open','partial') AND mode = 'live';
+
+-- Signal engine: pending signals for expiry sweep
+CREATE INDEX idx_signals_pending
+  ON signals (expires_at)
+  WHERE status = 'pending';
+
+-- Broker order reconciliation
+CREATE UNIQUE INDEX idx_orders_broker_id
+  ON orders (broker_order_id)
+  WHERE broker_order_id IS NOT NULL;
+
+-- Execution dedup guard (fires on every fill)
+CREATE UNIQUE INDEX idx_executions_broker_fill
+  ON executions (broker_fill_id);
+```
+
+### Analytical path indexes (seconds acceptable, off-market hours)
+
+```sql
+-- Candle range scan — primary backtest access pattern
+-- COVERING INDEX: no heap fetch needed
+CREATE INDEX idx_candles_backtest
+  ON candles (symbol_id, timeframe, bucket_ts DESC)
+  INCLUDE (open, high, low, close, volume);
+
+-- Tick range for CandleAggregator replay
+CREATE INDEX idx_ticks_replay
+  ON ticks (symbol_id, exchange_ts DESC)
+  INCLUDE (price, volume, bid, ask);
+
+-- Trade P&L aggregation by strategy run
+CREATE INDEX idx_trades_strategy
+  ON trades (account_id, mode, opened_at DESC)
+  INCLUDE (realised_pnl, commission, slippage);
+
+-- Learning records by regime (model training scan)
+CREATE INDEX idx_learning_regime
+  ON learning_records (regime, trade_closed_at DESC)
+  INCLUDE (was_winner, actual_return, predicted_return, kelly_used);
+
+-- Option chain latest snapshot
+CREATE INDEX idx_option_chain_latest
+  ON option_chain_snapshots (underlying_id, expiry, captured_at DESC);
+```
+
+### Write path (high-throughput inserts)
+
+`ticks` and `equity_curve`: TimescaleDB creates chunk-local indexes automatically on the partition key. No additional global indexes — doubles WAL write amplification without benefit.
+
+`executions`: append-only; `broker_fill_id` unique index is the only index needed beyond the trade FK.
+
+```sql
+CREATE INDEX idx_executions_trade
+  ON executions (trade_id, exchange_ts);
+```
+
+### Index maintenance
+
+`REINDEX CONCURRENTLY` weekly (Sunday 03:00 IST via `pg_cron`) on all partial indexes. Monthly review of `pg_stat_user_indexes`: any index with `idx_scan = 0` after 30 trading days is dropped. GIN indexes on JSONB columns deferred to Phase 5 — only added if learning engine JSONB path queries measure > 50ms.
+
+---
+
+## Optimization Strategy (Phase 3F)
+
+### Tick ingestion (50K rows/s peak)
+
+**Rule 1 — Batch inserts, never single-row.** Adapter batches ticks into 100ms windows. `COPY` protocol via `pg` driver.
+
+**Rule 2 — `synchronous_commit = off` for tick writer connection only.** Ticks are reconstructible from WebSocket on reconnect. Reduces fsync latency from ~5ms to ~0.1ms. All other connections keep `synchronous_commit = on`.
+
+**Rule 3 — FK declared `NOT VALID`, validated nightly.** Constraint validation at 50K rows/s with FK lookup costs ~30% throughput. Adapter guarantees `symbol_id` validity before insert.
+
+### Position MTM updates
+
+Use `UPDATE ... WHERE symbol_id = $1 AND status IN ('open','partial')` with `idx_positions_active` partial index. Update only three computed columns — never full row. Portfolio aggregate recomputed every 5 seconds via scheduled service call, not on every tick.
+
+### Candle queries (backtesting, chart rendering)
+
+Always include `timeframe` in WHERE clause — without it, the planner scans all timeframe partitions for the time range. Use covering index `idx_candles_backtest` — no heap fetch.
+
+For backtests needing 2+ years of daily candles: use `equity_curve_1d` continuous aggregate, not raw `candles`. Pre-aggregated; 100× fewer rows.
+
+### Signal engine reads (sub-10ms requirement)
+
+Read `strategy_performance` and `regime_performance` with `ORDER BY period_end DESC LIMIT 1`. Parse `indicator_rankings` JSONB in TypeScript application layer — never use `jsonb_array_elements()` on hot path.
+
+### PgBouncer configuration
+
+Transaction-mode pooling. Pool size = `(2 × CPU cores) + 1`. Tick writer: dedicated pool of 3 connections. All other app connections: shared pool of 10. Read replica: separate pool of 5 for backtest/analytical queries.
+
+---
+
+## Partitioning Strategy (Phase 3F)
+
+| Table | Partition type | Chunk / period | Compress after | Drop after |
+|---|---|---|---|---|
+| `ticks` | TimescaleDB hypertable | 1 day | 7 days | 90 days |
+| `candles` | TimescaleDB hypertable | 7 days | 30 days | Never |
+| `equity_curve` (1m) | TimescaleDB hypertable | 1 day | 7 days | 90 days |
+| `equity_curve` (1h agg) | Continuous aggregate | — | 30 days | 3 years |
+| `equity_curve` (1d agg) | Continuous aggregate | — | — | Never |
+| `positions` (closed) | pg_partman range | 1 year | n/a | Detach at 1yr |
+| `trades` | pg_partman range | 1 year | n/a | Never |
+
+Not partitioned (row counts stay below 50M at 3 years — overhead exceeds benefit): `signals`, `orders`, `executions`, `learning_records`, `performance_metrics`.
+
+**`option_strikes` scalability note:** At 10 active underlyings, 17M rows/day. Needs `pg_partman` range partition by `captured_at` month before Phase 6 (live options trading).
+
+---
+
+## Backup & Recovery Strategy (Phase 3F)
+
+### Continuous WAL archiving
+
+WAL segments streamed to S3-compatible object storage in real time. Recovery point objective (RPO): < 5 minutes. All write connections use `synchronous_commit = on` except tick writer.
+
+### Daily base backups
+
+`pg_basebackup` runs daily at 02:00 IST. Retained 30 days on object storage. TimescaleDB chunks older than compression threshold are already compressed — backup is storage-efficient.
+
+### Recovery tiers
+
+| Scenario | Recovery method | RTO |
+|---|---|---|
+| Single row corruption (trades) | Point-in-time recovery (PITR) + audit log replay | < 1 hour |
+| Table-level corruption | PITR to last known-good point | < 2 hours |
+| Full instance failure | Promote standby replica | < 5 minutes |
+| Tick data loss | Reconstruct from broker WebSocket on reconnect | < 1 trading session |
+
+### Read replica
+
+Synchronous streaming replication to one read replica. Replica serves: all backtest and analytical queries, report generation, learning engine aggregation. Live trading writer never sees analytical load.
+
+---
+
+## Archival Strategy (Phase 3F)
+
+### Cold storage pattern
+
+Detached `positions` partitions (closed, older than 1 year) move to `positions_archive` table via `pg_partman` partition detach + `ATTACH TABLE`. Archive table is identical in schema but on a cheaper tablespace. Application queries `positions` for hot data; archive queries target `positions_archive`. No application code change — tablespace swap only.
+
+### Retention summary
+
+| Table | Hot retention | Archive / cold |
+|---|---|---|
+| `accounts` | Permanent | No expiry (soft-delete) |
+| `portfolios` | Permanent | NAV history kept |
+| `positions` (open) | Until closed | — |
+| `positions` (closed) | 1 year hot | Detach → archive tablespace |
+| `trades` | Permanent | Never drop |
+| `equity_curve` (1m) | 90 days | Drop after |
+| `equity_curve` (1h agg) | 3 years | Compress at 30 days |
+| `equity_curve` (1d agg) | Permanent | Never drop |
+| `performance_metrics` | Permanent | Tiny row count |
+| `learning_records` | Permanent | Source of truth for model training |
+
+### `pg_cron` scheduled jobs
+
+| Job | Schedule | Action |
+|---|---|---|
+| EOD metrics recompute | 18:30 IST daily | Recompute `performance_metrics` for active portfolios |
+| Equity curve aggregate | Hourly | Refresh `equity_curve_1h` continuous aggregate |
+| Partition maintenance | Sunday 02:00 IST | Detach `positions` partitions older than 1 year |
+| Tick FK validation | 01:00 IST daily | `VALIDATE CONSTRAINT` on `ticks.symbol_id` FK |
+| Index maintenance | Sunday 03:00 IST | `REINDEX CONCURRENTLY` on partial indexes |
+| Session state purge | 09:00 IST daily | Truncate `broker_sessions` and `active_subscriptions` (unlogged tables rebuilt on connect) |
+| Instrument master sync | 20:00 IST daily | Upsert symbols from SmartAPI master JSON |
+
+---
+
+## Security Considerations (Phase 3G)
+
+### SEC1 — Token encryption (CRITICAL)
+
+`broker_sessions` stores `access_token`, `refresh_token`, `feed_token` — bearer credentials that allow full account impersonation. Encrypt at application layer using `pgp_sym_encrypt` before insert; decrypt on read. Encryption key in environment variables, never in DB. Applies to all three token fields.
+
+### SEC2 — Row-level security
+
+Enable PostgreSQL RLS on `trades`, `positions`, `orders`, `executions`, `portfolios`. App role sees only rows matching its `account_id`. DB enforces it — not just the application. Prevents data exposure from query bugs that drop the `WHERE account_id = $1` filter.
+
+### SEC3 — Role separation
+
+Three database roles required:
+
+| Role | Privileges | Used by |
+|---|---|---|
+| `artha_writer` | INSERT/UPDATE on trades/orders/executions/positions; INSERT on ticks/candles | Running application |
+| `artha_reader` | SELECT only | Read replica, backtest queries, report generation |
+| `artha_admin` | Schema migrations only | Migration runner; never active application |
+
+REVOKE all excess privileges. `artha_reader` must not have SELECT on `broker_token`, `broker_exch_type` (SEC5).
+
+### SEC4 — Audit chain key management
+
+`audit_log.chain_hash` uses `pgcrypto`. Key rotation requires `key_versions` table: `(key_id, activated_at, deprecated_at)`. Store `key_id` on each `audit_log` row. Old rows remain verifiable with original key; new rows use current key.
+
+### SEC5 — `broker_token` access restriction
+
+`symbols.broker_token` and `broker_exch_type` combined with a SmartAPI session allow subscription to any instrument. Apply column-level REVOKE on both columns for `artha_reader` role.
+
+### SEC6 — Connection encryption
+
+`pg_hba.conf` must require `scram-sha-256` authentication and `sslmode=require` for all remote connections. PgBouncer → PostgreSQL uses `peer` auth (localhost only). Deployment pre-flight check before Phase 4.
+
+---
+
+## Scalability Considerations (Phase 3G)
+
+### SC1 — Single TimescaleDB node write bottleneck
+
+At 50K ticks/s with 1500+ subscribed symbols (full NSE F&O), single-node PostgreSQL will saturate at ~6–12 months of growth. **Mitigation:** keep subscriptions scoped to active watchlist symbols (< 200 at launch). Re-evaluate when sustained tick volume exceeds 10K/s.
+
+### SC2 — `option_strikes` write volume underestimated
+
+Full NIFTY + BANKNIFTY chain (400+ strikes) at 5-second capture intervals = 1.7M rows/trading day for two underlyings. `option_strikes` is not a TimescaleDB hypertable. **Mitigation:** add `pg_partman` range partition by `captured_at` month before Phase 6 (live options).
+
+### SC3 — `performance_metrics` EOD job linear growth
+
+At 500 strategy runs, EOD recompute = 10K+ upserts. **Mitigation:** `statement_timeout = '5min'` on the job; async queue for overflow.
+
+### SC4 — `learning_records.features_at_entry` JSONB size
+
+At 50 trades/day × 200 features × 3 years = 5.5M rows with large JSONB blobs. **Mitigation:** cap feature vector at 64 named fields; schema-validate at application layer before insert.
+
+### SC5 — Read replica lag during backtest write storms
+
+Walk-forward backtesting writes thousands of rows in tight loops. Read replica lag can reach seconds. **Mitigation:** backtest writes go to a `backtest` schema on an isolated connection pool — never the main writer. Enforced at connection-pool level in Phase 4.
+
+---
+
+## Architecture Review (Phase 3G)
+
+### Strengths
+
+The Phase 3 architecture is internally consistent across all six sub-phases. TimescaleDB hypertables on `ticks` and `candles` with chunk-local indexes, continuous aggregates, and compression are production-grade. The `symbols` central registry with `broker_token` as the SmartAPI bridge is correct and clean. The `signals → trades → orders → executions` chain in Phase 3C is correctly modelled with an append-only `executions` table preventing duplicate fills at the DB layer. The `mode` column on `trades` unifying live/paper/backtest into one table is the right call. The five-stage learning loop (trade close → learning record → pg_cron aggregation → signal engine reads → recalibrated weights) is architecturally sound. The three-tier index strategy (hot path partial / analytical covering / write path minimal) is appropriate for the trading workload.
+
+### Phase 3G audit findings summary
+
+| ID | Category | Finding | Status |
+|---|---|---|---|
+| M1 | Missing | `strategy_runs` table never defined | Required — add migration 006 |
+| M2 | Missing | Unlogged session state tables never defined | Required — add to migration 003 |
+| M3 | Missing | `sync_log` table never defined | Required |
+| M4 | Missing | `risk_limits` table never defined | Required — Phase 4E blocker |
+| M5 | Missing | `audit_log` table never defined | Required for real-money trading |
+| M7 | Correction | `option_strikes.pcr` naming ambiguous | Rename to `strike_pcr`; add `chain_pcr` to `option_chain_snapshots` |
+| SEC1 | Security | Token encryption not specified | Implement before any live trading |
+| SEC2 | Security | No RLS on trade tables | Implement before live trading |
+| SEC3 | Security | No role separation defined | Define three roles before deployment |
+| SC2 | Scalability | `option_strikes` write volume underestimated | Partition before Phase 6 |
+
+---
+
+## Final Approved Phase 3 Design
+
+### Migration sequence
+
+```
+001_extensions.sql         — timescaledb, pg_partman, pg_cron, uuid-ossp, pgcrypto
+002_enums.sql              — exchange_t, asset_type, timeframe_t, signal_st, trade_st, order_st, position_st, candle_st
+003_accounts_sessions.sql  — accounts, broker_sessions (unlogged), active_subscriptions (unlogged)
+004_symbols.sql            — symbols
+005_market_data.sql        — ticks (hypertable), candles (hypertable), option_chain_snapshots, option_strikes
+006_strategy_runs.sql      — strategy_runs (M1 gap fill)
+007_signals_trades.sql     — signals, trades
+008_orders_executions.sql  — orders, executions
+009_portfolio.sql          — portfolios, positions, equity_curve (hypertable), performance_metrics
+010_learning.sql           — learning_records, strategy_performance, indicator_performance, regime_performance
+011_risk_limits.sql        — risk_limits (M4 gap fill)
+012_audit_log.sql          — audit_log, key_versions (M5 gap fill)
+013_sync_log.sql           — sync_log (M3 gap fill)
+014_indexes.sql            — all hot-path, analytical, and write-path indexes
+015_partitions.sql         — pg_partman config, TimescaleDB retention/compression policies
+016_close_reason.sql       — ALTER TABLE trades ADD COLUMN close_reason varchar(30) [Phase 4H Correction 1]
+017_strategy_runs_reports.sql — ALTER TABLE strategy_runs ADD COLUMN reports_jsonb jsonb [Phase 4H Correction 2]
+018_rbac.sql               — CREATE ROLE artha_writer, artha_reader, artha_admin; GRANT/REVOKE
+019_cron_jobs.sql          — pg_cron job registrations
+```
+
+### Continuous aggregates
+
+```
+database/timescaledb/continuous_aggregates.sql
+  ticks_1m              — rollup from ticks
+  candles_5m            — rollup from candles (1m)
+  candles_15m           — rollup from candles (5m)
+  candles_1h            — rollup from candles (15m)
+  candles_1d            — rollup from candles (1h)
+  equity_curve_1h       — OHLC equity rollup from equity_curve (1m)
+  equity_curve_1d       — daily close equity from equity_curve (1h)
+```
+
+---
+
+## Dependencies for Phase 4
+
+Phase 4 (Backtesting Engine) reads from and writes to these Phase 3 tables:
+
+| Table | Phase 4 operation | Component |
+|---|---|---|
+| `symbols` | Read | `EntrySimulator`, all builders |
+| `ticks` | Read | `ReplayTickFeed` |
+| `candles` | Read | `ReplayCandleFeed` |
+| `strategy_runs` | Read + Write | `BacktestRunner` |
+| `signals` | Write | `SignalEngine` (Phase 5) |
+| `trades` | Read + Write | `EntrySimulator`, `ExitSimulator`, analytics builders |
+| `orders` | Write | `EntrySimulator` |
+| `executions` | Write (append-only) | `EntrySimulator`, `ExitSimulator` |
+| `positions` | Write | `PositionTracker` |
+| `portfolios` | Read | `RiskValidationPipeline` stage 6 |
+| `equity_curve` | Write | `EquityCurveWriter` |
+| `performance_metrics` | Read + Write | `AnalyticsWriter`, report builders |
+| `learning_records` | Write | `PositionTracker` on trade close |
+| `risk_limits` | Read | `RiskValidationPipeline` stages 1–6 |
+| `strategy_performance` | Read | Signal engine (Phase 5) |
+| `regime_performance` | Read | Signal engine (Phase 5) |
+
+---
+
+## Phase 4 Readiness Checklist
+
+### Schema corrections applied
+
+- [ ] Migration `016_close_reason.sql` — `trades.close_reason varchar(30)` added
+- [ ] Migration `017_strategy_runs_reports.sql` — `strategy_runs.reports_jsonb jsonb` added (or separate `backtest_reports` table — review SC4)
+- [ ] `strategy_runs` table created (migration `006_strategy_runs.sql`)
+- [ ] `risk_limits` table created and seeded for test accounts (migration `011_risk_limits.sql`)
+- [ ] `broker_sessions` and `active_subscriptions` unlogged tables created (migration `003_accounts_sessions.sql`)
+
+### IBarEvent extension
+
+- [ ] `src/backtesting/interfaces/IBarEvent.ts` extended with optional `indicators?: Map<string, number>` for `EnrichedBarEvent` — Phase 4H Correction 3
+
+### Infrastructure
+
+- [ ] TimescaleDB extension installed and licensed
+- [ ] `pg_partman`, `pg_cron`, `uuid-ossp`, `pgcrypto` extensions installed
+- [ ] PgBouncer configured in transaction mode with correct pool sizes
+- [ ] Read replica configured with streaming replication
+- [ ] WAL archiving enabled to object storage
+- [ ] `pg_hba.conf` — `sslmode=require` for all remote connections
+
+### Security
+
+- [ ] Three roles created: `artha_writer`, `artha_reader`, `artha_admin`
+- [ ] REVOKE on `broker_token`, `broker_exch_type` for `artha_reader`
+- [ ] RLS enabled on `trades`, `positions`, `orders`, `executions`, `portfolios`
+- [ ] Token encryption key in environment variables (never in DB)
+
+### Data availability
+
+- [ ] NSE/BSE/NFO/MCX instrument master loaded into `symbols` table
+- [ ] Historical candle data loaded for at least 2 years (backtesting minimum)
+- [ ] NSE holiday calendar available (for `SimulatedClock` non-trading-day skip)
+
+---
+
+## Phase Completion Status
+
+| Phase | Title | Status |
+|---|---|---|
+| 3A | Database architecture and technology decision | Complete |
+| 3B | Market data schema (symbols, ticks, candles, option chain) | Complete |
+| 3C | Trading pipeline schema (signals, trades, orders, executions) | Complete |
+| 3D | Portfolio schema (accounts, portfolios, positions, equity curve, performance metrics) | Complete |
+| 3E | Learning engine schema (learning records, strategy/indicator/regime performance) | Complete |
+| 3F | Operations (indexing, query optimisation, partitioning, archival, backup) | Complete |
+| 3G | Architecture review, security, scalability, final recommendations | Complete |
+
+**Missing deliverables identified in 3G audit:** `strategy_runs`, `broker_sessions`, `active_subscriptions`, `sync_log`, `risk_limits`, `audit_log` table definitions — all documented above with required schemas. These are additions, not redesigns. Existing Phase 3 design is not modified.
+
+---
+
+*Document consolidated from Phase 3 architecture sessions (3A–3G). Do not modify approved architecture decisions in this document — create a Phase 3 amendment document for any corrections. Last updated: Phase 3G audit complete.*

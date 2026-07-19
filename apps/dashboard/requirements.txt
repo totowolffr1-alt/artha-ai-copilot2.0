@@ -1,0 +1,11 @@
+streamlit>=1.35.0
+pandas>=2.2.0
+numpy>=1.26.0
+xgboost>=2.0.3
+shap>=0.45.0
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.30
+matplotlib>=3.9.0
+plotly>=5.22.0
+scikit-learn>=1.5.0
+python-dotenv>=1.0.0

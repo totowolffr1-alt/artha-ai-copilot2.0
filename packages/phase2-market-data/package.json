@@ -1,0 +1,10 @@
+{
+  "name": "@artha/phase2-market-data",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/marketData/MarketDataService.ts",
+  "types": "src/marketData/MarketDataService.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -1,0 +1,835 @@
+
+# Artha AI — Phase 4 Backtesting Engine
+
+**Document type:** Architecture reference  
+**Status:** Complete — Conditional Pass  
+**Phases covered:** 4A through 4H  
+**Depends on:** Phase 2 (AngelOne adapter), Phase 3 (database schema)  
+**Feeds into:** Phase 5 (Signal Engine, Regime Engine, Indicator Pipeline)
+
+---
+
+## Executive Summary
+
+### Purpose of Phase 4
+
+Phase 4 designs the Artha AI backtesting engine — the system that allows trading strategies to be validated against historical Indian market data before being deployed with real capital. It provides a complete simulation environment that reuses the live signal, regime, and risk engines without modification, ensuring that backtest behaviour is structurally identical to live trading behaviour.
+
+The engine covers the full lifecycle: replaying historical candle and tick data, simulating order fills using realistic NSE/NFO execution rules, tracking positions and P&L intrabar, applying transaction costs accurate to Indian market regulations, gating every order through a six-stage risk validation pipeline, and producing post-run analytics and reports that feed the learning engine.
+
+### Major components completed
+
+| Phase | Component | Status |
+|---|---|---|
+| 4A | Backtesting Engine architecture | Complete |
+| 4B | Historical Data Replay System | Complete |
+| 4C | Trade Simulation Engine | Complete |
+| 4D | Transaction Cost Models | Complete |
+| 4E | Risk Validation Pipeline | Complete |
+| 4F | Performance Analytics | Complete |
+| 4G | Backtesting Report System | Complete |
+| 4H | Full architecture audit | Complete |
+
+### Readiness status
+
+The backtesting engine architecture is complete at the design level. All contracts, interfaces, data flows, and component boundaries are defined. Three schema corrections are required before Phase 5 implementation begins. Three missing components (strategy registry, indicator library, parameter optimiser) are explicitly deferred to Phase 5 — their absence does not block the engine design, as Phase 4 defines the contracts these components must satisfy.
+
+**Audit verdict: CONDITIONAL PASS** — ready for Phase 5 design pending three corrections documented in Section 4H.
+
+---
+
+## Architecture Overview
+
+### High-level architecture
+
+The backtesting engine sits between the Phase 3 database (data source and write target) and the Phase 5 signal/regime/risk engines (logic producers). It acts as a controlled execution environment: it substitutes real-time market data with historical replay, substitutes live broker order routing with a fill simulator, and captures all outputs — trades, executions, positions, equity curve — into the same Phase 3 schema used by live trading.
+
+The fundamental design principle is **engine reuse**: the signal engine, regime engine, and risk engine receive `BarEvent` or `TickEvent` from the replay feed via the same `IMarketDataProvider` interface they use in live mode. They have no awareness of whether time is simulated or real. This guarantees structural parity between backtest and live behaviour.
+
+### Module relationships
+
+```
+BacktestRunner (4A)
+  │
+  ├─ WalkForwardController (4A)     ← fold management, IS/OOS split
+  │
+  ├─ SimulatedClock (4A)            ← IST bar-step, NSE holiday skip
+  │
+  ├─ HistoricalDataFeed (4B)        ← implements IMarketDataProvider
+  │    ├─ ReplayController (4B)     ← play/pause/resume/seek/speed
+  │    ├─ ReplayTickFeed (4B)       ← cursor over ticks table
+  │    ├─ ReplayCandleFeed (4B)     ← windowed read from candles
+  │    └─ EventMerger (4B)         ← merges tick+candle by exchange_ts
+  │
+  ├─ [SignalEngine] (Phase 5)       ← consumes BarEvent via ReplayEventBus
+  ├─ [RegimeEngine] (Phase 5)       ← consumes BarEvent, classifies regime
+  │
+  ├─ RiskValidationPipeline (4E)    ← 6 stages, gates every order
+  │
+  ├─ TradeSimulationEngine (4C)
+  │    ├─ EntrySimulator (4C)       ← MARKET/LIMIT/SL-M fill model
+  │    ├─ ExitSimulator (4C)        ← full/partial/forced exit
+  │    ├─ SLManager (4C)            ← fixed/trailing/time-based SL
+  │    ├─ TargetManager (4C)        ← fixed/scaled/R-multiple TP
+  │    └─ PositionTracker (4C)      ← in-memory MTM, MAE/MFE per bar
+  │
+  ├─ CostAggregator (4D)
+  │    ├─ BrokerageModel (4D)       ← zero/flat-fee/percentage profiles
+  │    ├─ SlippageModel (4D)        ← zero/fixed/pct/spread/volume-adj
+  │    └─ TransactionCostModel (4D) ← STT/CTT, exchange, SEBI, stamp, GST
+  │
+  ├─ AnalyticsEngine (4F)           ← post-run, 7 metrics
+  │
+  └─ ReportOrchestrator (4G)        ← 5 parallel report builders
+```
+
+### Event flow
+
+One complete bar step through the full engine:
+
+```
+SimulatedClock advances one IST bar
+  → HistoricalDataFeed emits BarEvent (+ TickEvents if mixed mode)
+  → EventMerger orders by exchange_ts
+  → ReplayEventBus delivers to RegimeEngine
+  → RegimeEngine classifies regime label
+  → ReplayEventBus delivers to SignalEngine
+  → SignalEngine evaluates indicators → emits SignalEvent (or null)
+  → RiskValidationPipeline: 6 stages → approved_qty or rejection
+  → EntrySimulator: fill price + CostAggregator
+  → PositionTracker: MTM update, MAE/MFE tracking
+  → SLManager + TargetManager: check breach on every tick/bar
+  → ExitSimulator (on breach): fill + CostAggregator
+  → DB writes: trades, executions, positions, equity_curve
+  → On trade close: learning_records written
+
+After strategy_runs.status = completed:
+  → AnalyticsEngine: 7 metrics → performance_metrics upsert
+  → ReportOrchestrator: 5 builders in parallel → ReportRegistry
+```
+
+---
+
+## Phase 4A — Backtesting Engine Architecture
+
+### Objectives
+
+Design the top-level orchestration layer of the backtesting engine: the component that drives the bar loop, manages strategy run lifecycle, coordinates walk-forward fold execution, and defines how the reused signal, regime, and risk engines are wired into the simulation environment.
+
+### Design decisions
+
+**Event-driven over vectorised.** The engine processes one bar at a time via an EventBus rather than loading entire price series into arrays and vectorising. This is required for Indian F&O because: (1) options chain data is snapshot-based and cannot be vectorised cleanly across strikes, (2) the SL/TP simulation requires intrabar tick-level events that vectorised engines cannot model accurately, (3) the reuse contract with the live signal/regime/risk engines requires event-driven delivery — those engines maintain stateful indicator buffers that must be advanced bar-by-bar.
+
+**Engine reuse via `IMarketDataProvider`.** The signal engine, regime engine, and risk engine plug into the backtesting engine through the same interface they use in live mode. They receive `BarEvent` from `HistoricalDataFeed` without knowing time is simulated. This is the central architectural guarantee — backtest behaviour is structurally identical to live behaviour.
+
+**`mode = 'backtest'` column, not a separate schema.** Backtest trades, orders, and executions are written to the same Phase 3 tables as live and paper trades, distinguished by the `mode` column. This allows identical P&L queries across all three modes with a single filter, and ensures the learning engine trains on backtest data as naturally as live data.
+
+**`WalkForwardController` wraps `BacktestRunner`.** Walk-forward validation is a higher-order control layer — it manages fold splits and calls `BacktestRunner` for each fold in sequence. `BacktestRunner` has no awareness of folds; it runs a single contiguous date range. This separation keeps `BacktestRunner` simple and reusable outside the walk-forward context.
+
+**Overfitting detection in `WalkForwardController`.** If OOS Sharpe < IS Sharpe × 0.5 on three or more consecutive folds, the controller marks the run as `overfit` and halts. This is a hard algorithmic guard, not a post-hoc advisory.
+
+### Outputs
+
+- `BacktestRunner` — orchestrator, `strategy_runs` lifecycle (pending → running → completed/failed)
+- `SimulatedClock` — IST-aware bar counter, NSE holiday skip, deterministic time advancement
+- `WalkForwardController` — fold management, IS/OOS date splits, overfitting detection
+- `ReplayEventBus` — scoped EventBus instance separate from live bus; prevents replay event leakage
+- Defined integration contracts for `SignalEngine`, `RegimeEngine`, `RiskEngine` (producers deferred to Phase 5)
+
+---
+
+## Phase 4B — Historical Data Replay System
+
+### Objectives
+
+Design the system that replays historical candle and tick data from the Phase 3 database, presenting it to the signal and regime engines through the same interface as the live market data feed. Provide time control: play, pause, resume, fast-forward, and seek.
+
+### Design decisions
+
+**`HistoricalDataFeed` implements `IMarketDataProvider`.** The same interface defined in Phase 2B for live SmartAPI data. To consumers, the replay feed is indistinguishable from the live feed. This is enforced at the type level — `HistoricalDataFeed` satisfies `IMarketDataProvider`, and all engine bindings use that interface.
+
+**`ReplayController` owns time; feeds own data.** The clock (speed multiplier, pause state, current IST pointer) is managed by `ReplayController`. The `ReplayTickFeed` and `ReplayCandleFeed` are data cursors — they emit when told. This separation allows feeds to be replaced (e.g. synthetic data feed for unit tests) without changing time control logic.
+
+**`received_ts` rewritten to simulated wall-clock time.** All emitted events have `received_ts = ReplayController.currentIST`. Any latency metric comparing `received_ts` to `exchange_ts` is suppressed during replay via `BacktestConfig.isReplay = true`. This prevents stale timestamps from contaminating latency analysis.
+
+**Three operating modes.** `candle_only` (fastest, no tick feed), `tick_only` (execution precision, no candle BarEvents), `mixed` (both, most accurate for MAE/MFE). Selected at `play()` time.
+
+**Cursor-based DB pagination.** `ReplayTickFeed` fetches ticks in pages of 2,000 rows, prefetching the next page asynchronously while the current page is emitted. No DB read on the hot emit path.
+
+**Two correctness invariants.**  
+1. `RegimeEngine.resetBuffer()` is called on every `seekTo()` and every `play()` from idle. A regime engine with a buffer seeded from a prior position will misclassify for the first N bars.  
+2. `received_ts` on all emitted events is always set to `ReplayController.currentIST` — never the DB-stored value.
+
+**Conflict resolution on missing tick data.** If `ticks` table has no data for the requested range, `ReplayTickFeed` returns empty and `EventMerger` falls back to `candle_only` mode silently. Tick data is additive; candle data is always required.
+
+### Outputs
+
+Six-state lifecycle: `idle → loading → running → paused → complete`, with `seekTo()` returning to `loading` from either `running` or `paused`.
+
+Components:
+- `ReplayController` — play/pause/resume/seek/setSpeed(1x–100x)
+- `ReplayTickFeed` — cursor-paginated tick stream
+- `ReplayCandleFeed` — windowed 500-bar prefetch, all timeframes
+- `EventMerger` — min-heap merge ordered by `exchange_ts`; candle emitted before tick on same timestamp
+
+---
+
+## Phase 4C — Trade Simulation Engine
+
+### Objectives
+
+Design the pure state machine that receives signal events and simulates the full trade lifecycle: entry fill, position tracking, stop-loss and target management, exit fill, P&L computation, and learning record creation.
+
+### Design decisions
+
+**Pure state machine, no broker calls.** The simulation engine never touches the live order router or broker adapter. All fills are computed by the local `OrderSimulator`. The only external dependencies are `CostAggregator` (for fill costs) and Phase 3 repositories (for DB writes).
+
+**DB writes only on state transitions, not on every tick.** `PositionTracker` maintains all in-memory state. Writes occur on: `pending → open` (trades + orders + executions), `open → partial` (executions + trades), any `→ closed` (trades + positions + learning_records). Equity curve written once per bar close, not per tick — prevents write amplification at tick cadence.
+
+**`TradeStateMachine` enforces valid transitions.** External components call methods on the state machine, never mutating position state directly. Invalid transitions (e.g. SL check run before fill confirmation) throw — caught at test time, not production.
+
+**SL/TP conflict resolution: SL wins.** When a bar's range simultaneously breaches both SL (bar.low) and TP (bar.high) for a LONG position, SL is assumed to have been hit first. Conservative assumption; prevents overstated P&L from ambiguous bars. Overridable via `config.sl_tp_conflict = 'tp_wins'`, which must be documented in `strategy_runs.parameter_snapshot`.
+
+**Forced exit at 15:29 IST, non-negotiable for MIS.** All open simulated MIS positions are closed at bar close price. NRML strategies may opt out via `config.allow_overnight = true` for multi-day backtests.
+
+**Fold boundary exit.** At each walk-forward fold boundary, `PositionTracker.forceCloseAll()` is called. Positions are closed and labelled `fold_boundary_exit` in `trades.close_reason`. No position state carries across fold boundaries.
+
+**MAE/MFE as normalised fractions.** Maximum adverse and favourable excursion stored as fractions of entry price (`(worst_ltp - avg_cost) / avg_cost`), not absolute rupees. Comparable across symbols and position sizes. Written to `learning_records` on close.
+
+### Outputs
+
+Eight-state trade lifecycle: `signal_received → pending → open ↔ partial → [sl_triggered | target_hit | timeout_exit | forced_exit] → closed`.
+
+Components:
+- `EntrySimulator` — MARKET (next bar open + slippage), LIMIT (range cross check), SL-M (trigger breach)
+- `ExitSimulator` — full/partial/forced exit, realised P&L computation
+- `SLManager` — fixed/trailing/time-based; tick-level breach preferred over bar-level
+- `TargetManager` — fixed/scaled/R-multiple; partial exit at each level; fractions must sum to 1.0
+- `PositionTracker` — `Map<trade_id, SimulatedPosition>`; MTM, MAE, MFE, holding_bars per bar
+- `TradeStateMachine` — owns transition logic; throws on invalid transitions
+
+`SimulatedPosition` in-memory fields: `trade_id`, `symbol_id`, `direction`, `qty`, `avg_cost`, `status`, `sl_price`, `sl_type`, `tp_levels[]`, `ltp`, `unrealised_pnl`, `mae`, `mfe`, `holding_bars`, `opened_bar_ts`, `entry_price`, `commission_paid`.
+
+---
+
+## Phase 4D — Transaction Cost Models
+
+### Objectives
+
+Design pure-function cost models for Indian market transaction costs: brokerage, slippage, and all statutory charges (STT/CTT, exchange fees, SEBI turnover fee, stamp duty, GST). Support NSE equity, NFO futures, NFO options, and MCX commodity segments.
+
+### Design decisions
+
+**Pure functions, no state, no DB reads on hot path.** All three models receive `(OrderRequest, FillContext)` and return `CostResult`. Parameters loaded once from `CostConfig` at `BacktestRunner` start and injected. Models are testable in isolation and swappable per strategy run.
+
+**Strategy pattern for brokerage.** Three built-in profiles:
+- `ZeroBrokerageProfile` — delivery equity, zero brokerage (statutory charges still apply)
+- `FlatFeeProfile` — ₹20 per executed order; default for all NFO/MCX strategies
+- `PercentageProfile` — rate × turnover, segment-specific caps; used for full-service broker simulation
+
+**Options brokerage on premium, not notional.** `turnover` for options = `premium × qty`. Getting this wrong overstates option costs by 10–50×.
+
+**Five slippage models.** Zero (optimistic upper bound), fixed paise (per segment), percentage of price (scales with instrument price), spread-based (uses bid/ask from last tick — most realistic when tick data exists), volume-adjusted (slippage grows as order size approaches average daily volume — prevents unrealistically large fills).
+
+**Slippage always works against the trade on both legs.** Entry and exit slippage both reduce P&L. A round-trip costs 2× the per-leg slippage.
+
+**Statutory charges are fixed law, not configurable.** STT/CTT, exchange transaction charges, SEBI turnover fee, stamp duty — computed deterministically from segment + direction. The rates files are pure data constants. Updating a rate requires changing only the rates file, not model logic.
+
+**Options exercise STT is a special case.** When an options position is held to expiry and exercises ITM, STT is levied on the intrinsic value, not the premium paid. For deep ITM options this can exceed the premium paid. `TransactionCostModel` detects this case and computes it separately.
+
+**GST computed last.** 18% GST applies to `brokerage + exchange_charges`, not to STT or stamp duty. Order of computation: slippage → brokerage → exchange charges → SEBI fee → stamp duty → GST.
+
+**All cost values stored in paise (integer).** Converted to rupees only at P&L computation in `ExitSimulator`.
+
+**`effective_price` is the per-unit all-in cost.** `avg_cost` in `EntrySimulator` uses `effective_price`, not raw fill price. This is the correct denominator for return computation.
+
+### Outputs
+
+`CostResult` shape: `{ fill_price, slippage_paise, brokerage_paise, stt_paise, exchange_paise, sebi_fee_paise, stamp_paise, gst_paise, total_cost_paise, effective_price, options_exercise: boolean }`.
+
+Components:
+- `CostAggregator` — single entry point; calls all three models in sequence
+- `BrokerageModel` — strategy pattern; three built-in profiles
+- `SlippageModel` — five built-in models; spread model falls back to fixed paise if no tick data
+- `TransactionCostModel` — statutory charges; `SegmentRouter` resolves rates by `(exchange, asset_type, product_type)`
+- `CostConfig` — injected at `BacktestRunner` start; selects broker profile and slippage model
+- Rates files: `EquityRates`, `FuturesRates`, `OptionsRates`, `CommodityRates` — pure data, no logic
+
+---
+
+## Phase 4E — Risk Validation Pipeline
+
+### Objectives
+
+Design the six-stage risk validation pipeline that gates every signal before it becomes an order. Enforce position sizing, daily loss limits, portfolio drawdown floors, exposure concentration, concurrent position limits, and margin availability — all in-memory, synchronously, on the hot path.
+
+### Design decisions
+
+**Pipeline, not a single gate.** Six independent stages run in sequence. Each stage can independently reject or (Stage 1 only) resize the order. Pipeline halts at first rejection — remaining stages skipped.
+
+**All checks are pure in-memory comparisons.** `RiskState` is maintained by `RiskEngine` across the bar loop. No DB reads during validation. `RiskState` is updated by `PositionTracker` after each fill and each bar close.
+
+**Rejected signals are training data.** `signal.status = rejected` and `RiskValidationResult` stored on the signal row (`signals.features` JSONB gets a `risk_rejection` key). The learning engine trains on rejected signals as well as acted signals.
+
+**Daily loss circuit breaker is session-scoped and irrecoverable.** Once `daily_loss_limit_breached = true` on `RiskState`, no new entries for the rest of the trading session — even if open positions recover MTM. Resets at 09:15 IST next session.
+
+**Unrealised loss included in daily loss calculation.** `session_total_loss = session_realised_pnl + session_unrealised_pnl`. A strategy with ₹40K realised loss and ₹15K open unrealised loss has consumed ₹55K of risk budget. More conservative than NSE RMS definition; correct for simulation accuracy.
+
+**Max drawdown check is fold-level.** `portfolio_peak_value` is the high-water mark across the entire fold. Once breached, the fold is marked `drawdown_halted` and `WalkForwardController` is notified. No recovery within fold.
+
+**Kelly → qty sizing in Stage 1.** Five steps: Kelly fraction to raw notional → notional cap → raw qty from notional → lot-size alignment → min-notional floor check. Resize (not reject) at notional cap; reject if `qty < lot_size` after alignment.
+
+**Opposing direction block is separate from same-symbol block.** Cannot open SHORT while LONG is open in same symbol even when `allow_pyramid = true`. Reversals require explicit close first.
+
+**Margin requirements are SPAN-approximated.** `span_margin_rate` loaded from `CostConfig` — not fetched from NSE live SPAN calculator. Conservative flat rates: 12% NIFTY futures, 15% stock futures, 35% short options. Long options margin = premium only (max loss).
+
+### Outputs
+
+`RiskValidationResult` shape: `{ passed: boolean, stage: 1–6, reason: string | null, adjusted_qty: number | null, detail: string }`.
+
+Six validation stages:
+
+| Stage | Name | Reject or Resize |
+|---|---|---|
+| 1 | Position sizing | Resize at notional cap; reject below min lot |
+| 2 | Daily loss limit | Reject; circuit breaker irrecoverable within session |
+| 3 | Max drawdown floor | Reject; fold-level circuit breaker |
+| 4 | Exposure limits | Reject (symbol / segment / gross / net sub-checks) |
+| 5 | Concurrent positions | Reject (max open trades / same-symbol / opposing direction) |
+| 6 | Margin availability | Reject; margin reserved on approval |
+
+`RiskState` fields: `session_realised_pnl`, `session_unrealised_pnl`, `portfolio_peak_value`, `portfolio_current_value`, `gross_exposure`, `net_exposure`, `exposure_by_symbol`, `exposure_by_segment`, `open_trade_count`, `open_symbols`, `cash_available`, `margin_used`, `daily_limit_hit`.
+
+---
+
+## Phase 4F — Performance Analytics
+
+### Objectives
+
+Design the post-run metric computation system. Seven metrics computed over closed trade sets and equity time-series after `strategy_runs.status = completed`. No metric touches open positions or runs during the bar loop.
+
+### Design decisions
+
+**Computation is post-run, not real-time.** `AnalyticsEngine` is triggered by run completion, EOD `pg_cron` job, or `WalkForwardController.onFoldComplete()`. The bar loop writes raw data; analytics reads it after.
+
+**All metrics are pure functions with a fixed computation order.** Metrics 1–4 depend only on the trade set; metrics 5–8 depend only on the equity series; metric 9 (Calmar) depends on metrics 8 (CAGR) and 5 (max drawdown). The order is enforced by `AnalyticsEngine` — not by individual metric classes.
+
+**`NULL` propagation, not exceptions.** If a stage returns `null` (insufficient data), downstream dependents return `null` with `reason = 'upstream_null'`. The full `performance_metrics` row is always written — insufficient data is a valid and informative result.
+
+**Walk-forward aware.** IS and OOS windows of each fold produce separate metric rows: `period_type = 'is_fold_N'` and `'oos_fold_N'`. IS/OOS Sharpe ratio divergence across folds is the primary overfitting signal surfaced by `StrategySummaryReport`.
+
+**Risk-free rate = 6.5% annualised (RBI repo).** Applied to Sharpe and Sortino as daily RF = `(1.065)^(1/252) - 1`. Not optional — a strategy returning 8% in a 6.5% RF environment has near-zero Sharpe despite positive returns.
+
+**Population standard deviation for Sharpe.** Uses N denominator (not N-1). Consistent with most institutional definitions.
+
+### Outputs
+
+Seven metrics with minimum sample guardrails:
+
+| Metric | Formula | Min trades | Min days | NULL condition |
+|---|---|---|---|---|
+| Win rate | W / N | 1 | — | 0 trades |
+| Profit factor | gross_profit / gross_loss | 1 | — | no losses |
+| Expectancy | (win_rate × avg_win) − ((1 − win_rate) × avg_loss) | 5 | — | < 5 trades |
+| Max drawdown | O(n) equity series scan | — | 2 | < 2 points |
+| Sharpe | mean(excess_returns) / std × √252 | 30 | 20 | below either |
+| Sortino | mean(excess_returns) / downside_std × √252 | 30 | 20 | below either |
+| CAGR | (E_end/E_start)^(1/years) − 1 | — | 252 | < 1 year |
+| Calmar | CAGR / max_drawdown_pct | — | — | either input NULL |
+
+Components:
+- `AnalyticsEngine` — orchestrator; period loop; triggers; enforces computation order
+- `TradeSetBuilder` — reads `trades`, builds return arrays
+- `EquitySeriesBuilder` — reads `equity_curve` at 1d grain, builds daily returns
+- Seven metric classes implementing `IMetric` interface
+- `AnalyticsWriter` — upserts `performance_metrics`; patches `strategy_runs.summary_metrics` JSONB
+
+---
+
+## Phase 4G — Backtesting Report System
+
+### Objectives
+
+Design the five report builders that project post-run data into typed `ReportData` contracts consumed by the UI layer. No report computes anything — all computation is owned by `AnalyticsEngine` (Phase 4F).
+
+### Design decisions
+
+**Reports are read-only projections.** Builders read from Phase 3 repositories and return typed structs. No writes. No side effects. Idempotent.
+
+**Parallel dispatch.** `ReportOrchestrator` calls all five builders via `Promise.all`. Total report generation time is bounded by the slowest builder, not the sum of all five. Expected < 500ms for a 1-year backtest.
+
+**`ReportRegistry` is the UI's only access point.** The UI layer never calls builders directly. All report data flows through the registry, which persists to `strategy_runs.reports_jsonb`.
+
+**`contracts/` is the Phase 8 UI team's API surface.** When Phase 8 builds chart components, it imports from `contracts/` only — never from `builders/` or `helpers/`. This boundary is enforced at the module level.
+
+**Benchmark comparison via `parameter_snapshot.benchmark_symbol`.** `EquityCurveBuilder` reads the benchmark symbol's daily candle close from the `candles` table and attaches it to equity curve points as an optional field. Only populated if the parameter snapshot specifies a benchmark.
+
+**Monthly `calendar` object pre-computed by builder.** `MonthlyPerformanceBuilder` assembles `{ [year]: { [month]: return_pct } }` for direct heatmap rendering — no frontend computation required.
+
+**Trade list pagination is currently builder-side.** Identified in Phase 4H as a scalability concern (S5) — must be corrected to DB-side `LIMIT/OFFSET` before large backtests are run.
+
+### Outputs
+
+Five reports with typed data contracts:
+
+| Report | Primary sources | Key fields |
+|---|---|---|
+| `EquityCurveReport` | `equity_curve`, `performance_metrics` | points[], summary{}, optional benchmark |
+| `TradeListReport` | `trades`, `learning_records`, `symbols` | trades[], pagination{} |
+| `DrawdownReport` | `equity_curve`, `trades` | periods[], max_drawdown{}, underwater_pct |
+| `StrategySummaryReport` | `performance_metrics`, `strategy_runs`, `learning_records` | metrics{}, regime_breakdown[], walk_forward? |
+| `MonthlyPerformanceReport` | `performance_metrics`, `equity_curve` | months[], calendar{}, annual_summary[] |
+
+Components:
+- `ReportOrchestrator` — resolves builders, parallel dispatch, stores to registry
+- `ReportRegistry` — in-memory Map + `strategy_runs.reports_jsonb` persistence
+- Five builder classes implementing `IReportBuilder`
+- `DrawdownScanner` helper — O(n) peak-to-trough period detector; shared by two builders
+- `DateSeriesHelper` — IST date bucketing, gap filling
+- `PaginationHelper` — page/page_size slice logic
+
+---
+
+## Phase 4H Review and Audit
+
+### Missing components
+
+**M1 — No strategy registry or definition layer.**
+Every phase references `strategy_run_id` and `parameter_snapshot` but no component defines what a strategy *is* — its indicator set, entry conditions, exit conditions, parameter schema, or version lineage. `BacktestRunner` accepts a `BacktestConfig` but the full config shape is undefined. Phase 5 must deliver `StrategyDefinition` as its first output — everything else keys off this.
+
+**M2 — No indicator library.**
+`SignalEngine`, `RegimeEngine`, and `learning_records.features_at_entry` reference indicators (RSI, EMA, ATR, VWAP deviation etc.) but no indicator computation layer was designed. The `IIndicator` interface, `IndicatorBuffer` (stateful rolling window), and `IndicatorPipeline` (ordered computation DAG) are Phase 5 deliverables. Without them, `HistoricalDataFeed` emits raw OHLCV only — the signal engine has nothing to evaluate.
+
+**M3 — No parameter optimiser.**
+`WalkForwardController` validates stability but does not search parameter space. A grid-search optimiser that runs `BacktestRunner` across a parameter grid and ranks by OOS Sharpe is required for walk-forward validation to be meaningful. Phase 5 deliverable.
+
+**M4 — `BarEvent` shape incomplete for indicator delivery.**
+Signal and regime engines need pre-computed indicator values attached to each bar. `EnrichedBarEvent` extending `IBarEvent` with `indicators: Map<string, number>` must be defined before Phase 5 adds the indicator pipeline. Extension must be backward-compatible.
+
+**M5 — `strategy_runs.parameter_snapshot` JSONB structure undefined.**
+Referenced across 4A, 4C, 4D, 4E, 4G — never formally typed. Phase 5 must define the canonical schema. Minimum required keys: `strategy_id`, `strategy_version`, `indicators[]`, `entry_conditions[]`, `exit_conditions[]`, `sl_config`, `tp_config`, `risk_config`, `walk_forward_config`, `cost_config`.
+
+**M6 — No data gap handling in `HistoricalDataFeed`.**
+Behaviour when candle data is missing for a symbol on a given date is undefined. Standard assumption is forward-fill (last known close), but this must be explicit and configurable. Undefined gaps cause silent correctness failures.
+
+**M7 — `seekTo()` warmup period underspecified.**
+After a seek and after each fold boundary, `RegimeEngine` requires N warmup bars before producing valid regime classifications. The signal engine must suppress signal evaluation during warmup. `warmup_bars` must be formally defined as a field in `BacktestConfig` and enforced by both `BacktestRunner` and `WalkForwardController`.
+
+**M8 — No benchmark comparison infrastructure.**
+`EquityCurveReport` has an optional `benchmark` field but no component defines how benchmark data is loaded and normalised. NIFTY 50 daily close data must exist in `candles`; the instrument master sync must include the index. Data pipeline dependency on Phase 3B.
+
+---
+
+### Scalability concerns
+
+**S1 — Walk-forward with grid search is O(folds × params) sequential runs.**
+`WalkForwardController` currently calls `BacktestRunner` sequentially. Folds are independent — parallelisation is architecturally supported (all state is fold-local) but not exploited. At 1-minute candle granularity this becomes the primary performance bottleneck.
+
+**S2 — `IndicatorBuffer` incremental algorithm requirement.**
+Rolling indicators with long lookback periods (e.g. 252-bar annual rolling Sharpe) computed naively are O(n) per bar = O(n²) per run. Phase 5's `IndicatorPipeline` must use incremental (online) algorithms for all rolling computations.
+
+**S3 — `equity_curve` write amplification at 1-minute granularity.**
+Writing one equity curve point per bar at 1-minute granularity over 250 trading days produces 93,750 inserts per run. Across a 50-param grid walk-forward: 23M rows. Mitigation: write equity curve at 1d granularity during backtest runs; intraday MAE/MFE is tracked separately by `PositionTracker`.
+
+**S4 — `reports_jsonb` column size for large backtests.**
+A trade list for a 3-year backtest with 5K trades ≈ 800KB JSONB. Across all five reports: 2–5MB per run. Recommendation: store report metadata in `reports_jsonb`; store actual report data in a separate `backtest_reports` table with `(run_id, report_type)` as key. Flag as Phase 4G schema correction.
+
+**S5 — `TradeListBuilder` pagination is currently builder-side.**
+Full trade set loaded into memory before slicing. Must be corrected to DB-side `LIMIT/OFFSET` via repository call before large backtests run.
+
+---
+
+### Performance concerns
+
+**P1 — `CostAggregator` `SegmentRouter.resolve()` not memoized.**
+Called on every fill. Segment rates for a given `(exchange, asset_type, product_type)` triplet never change within a run. Memoizing eliminates redundant lookups across 15K+ fill events.
+
+**P2 — `DrawdownScanner` runs twice.**
+`DrawdownReportBuilder` and `EquityCurveBuilder` both perform the O(n) equity series scan independently. Fix: `ReportOrchestrator` runs `DrawdownScanner` once and passes the result to both builders via a `ScanCache`.
+
+**P3 — `AnalyticsEngine` re-reads full trade set for `all_time` metrics each fold.**
+By fold 5, `all_time` computation reads all trades from folds 1–5. An incremental accumulator maintaining running totals across folds reduces this to O(new_trades_in_fold) per fold call.
+
+**P4 — `SimulatedClock` NSE holiday calendar may be DB-queried per fold.**
+If `WalkForwardController` creates a new `SimulatedClock` per fold, the holiday calendar is queried once per fold. Load once at `BacktestRunner` start and inject into all clocks.
+
+**P5 — Duplicate repository queries across parallel report builders.**
+Five builders in `Promise.all` each query `strategy_runs` for the same run record. A `ReportQueryCache` keyed by `(run_id, table, filter_hash)` with TTL scoped to report generation duration eliminates redundant queries.
+
+---
+
+### Integration plan for Phase 5
+
+**Contracts Phase 5 must satisfy:**
+
+| Phase 4 expects | Phase 5 must deliver |
+|---|---|
+| `IMarketDataProvider` on `HistoricalDataFeed` | Signal engine subscribes via same interface |
+| `BarEvent { symbol, timeframe, ohlcv, bucket_ts }` | Extended to `EnrichedBarEvent` — backward compatible |
+| `SignalEvent { signal_type, direction, strength, entry_price_hint, stop_loss, take_profit, kelly_fraction, regime, features }` | Signal engine emits exactly this shape |
+| `RiskValidationResult { passed, stage, reason, adjusted_qty }` | Risk engine returns exactly this shape |
+| `strategy_runs.parameter_snapshot` JSONB | Phase 5 defines canonical schema |
+| `RegimeEngine.resetBuffer()` callable | Regime engine exposes this method |
+| `risk_limits` table populated before run | Strategy definition includes default risk limits |
+
+**Integration sequence for Phase 5:**
+
+1. Define `StrategyDefinition` type and `parameter_snapshot` canonical JSONB schema
+2. Build `IIndicator` interface and 5+ foundational indicators (EMA, RSI, ATR, VWAP, volume ratio)
+3. Build `IndicatorPipeline` with incremental algorithms; produce `EnrichedBarEvent`
+4. Build `RegimeEngine` consuming `EnrichedBarEvent`; honour `resetBuffer()` contract; define `warmup_bars`
+5. Build `SignalEngine` consuming `EnrichedBarEvent` + regime label; emit `SignalEvent`
+6. Wire `BacktestRunner` end-to-end with one concrete strategy — first real backtest proves integration
+7. Add `WalkForwardController` optimisation loop — grid search over strategy parameters
+
+---
+
+### Required corrections before Phase 5
+
+**Correction 1 — Add `close_reason` to `trades` table**  
+Phase 4C references `trades.close_reason varchar(30)` to distinguish `sl_triggered`, `target_hit`, `timeout_exit`, `forced_exit`, `fold_boundary_exit`. Phase 3C did not include this column.  
+Migration: `016_close_reason.sql`
+
+**Correction 2 — Add `reports_jsonb` to `strategy_runs`**  
+Phase 4G's `ReportRegistry` persists report data to `strategy_runs.reports_jsonb`. This column does not exist in the current Phase 3C schema.  
+Migration: `017_strategy_runs_reports.sql`  
+Note: Review scalability concern S4 before committing to JSONB vs a separate `backtest_reports` table.
+
+**Correction 3 — Extend `IBarEvent` to `EnrichedBarEvent`**  
+Phase 4H M4 identifies that the signal and regime engines need indicator values attached to each bar. `IBarEvent` must be extended to `EnrichedBarEvent` with optional `indicators?: Map<string, number>` field before Phase 5 adds the indicator pipeline.  
+File: `src/backtesting/interfaces/IBarEvent.ts`  
+The extension must be backward-compatible — existing `BarEvent` consumers must not require changes.
+
+---
+
+### Audit verdict
+
+**CONDITIONAL PASS**
+
+The Phase 4 architecture is internally consistent, correctly layered, and ready for Phase 5 design. Three schema corrections are required before Phase 5 implementation begins. Three component gaps (M1, M2, M3) are explicitly deferred to Phase 5 — their contracts are fully defined by Phase 4. No phase contains a design flaw that requires rework.
+
+---
+
+## Readiness Assessment
+
+### Current readiness score
+
+**8.5 / 10**
+
+Deductions: −1.0 for M1–M3 missing components (deferred by design, not oversight); −0.5 for three schema corrections required before implementation.
+
+### Risks
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| `IndicatorPipeline` incremental algorithm complexity | Medium | Phase 5 must prioritise this; naive implementation produces O(n²) runs |
+| Walk-forward grid search runtime at 1-minute granularity | Medium | Parallelise folds in `WalkForwardController` — architecturally supported |
+| `reports_jsonb` column size for large backtests | Low | Apply S4 correction before first production backtest |
+| `BarEvent` extension breaks Phase 4 type contracts | Low | `EnrichedBarEvent` extends `IBarEvent` backward-compatibly — apply Correction 3 immediately |
+| Data gap handling undefined in `HistoricalDataFeed` | Medium | Specify forward-fill as default in Phase 5; undefined gaps cause silent errors |
+
+### Dependencies
+
+**Phase 2 dependencies (complete):**
+- `IMarketDataProvider` interface — `HistoricalDataFeed` implements this
+- `IMarketDataAdapter` — not directly used by backtest engine; adapter is live-only
+- `AngelOneAdapter` — not used by backtesting; historical data comes from DB, not broker
+
+**Phase 3 dependencies (complete — schema):**
+- `symbols` — referenced by all four market data tables and all trade tables
+- `ticks` — `ReplayTickFeed` reads cursor over `(symbol_id, exchange_ts)`
+- `candles` — `ReplayCandleFeed` reads windowed ranges; primary backtest data source
+- `strategy_runs` — written by `BacktestRunner`; read by all analytics and report builders
+- `signals` — written by `SignalEngine` (Phase 5); read by `AnalyticsEngine` and `TradeListBuilder`
+- `trades` — written by `EntrySimulator` and `ExitSimulator`; read by all analytics builders
+- `orders` — written by `EntrySimulator`
+- `executions` — written by `EntrySimulator` and `ExitSimulator`; append-only
+- `positions` — written by `PositionTracker` on close
+- `portfolios` — read by `RiskEngine` for `cash_available`
+- `equity_curve` — written by `PositionTracker`; read by analytics and report builders
+- `performance_metrics` — written by `AnalyticsWriter`; read by report builders
+- `learning_records` — written on trade close; read by `StrategySummaryBuilder` and `MonthlyPerformanceBuilder`
+- `risk_limits` — read by `RiskValidationPipeline` at run start
+- `regime_performance` — read by `SignalEngine` for regime-conditional weighting (Phase 5)
+- `strategy_performance` — read by `SignalEngine` for kelly accuracy adjustment (Phase 5)
+
+---
+
+## Final Folder Structure
+
+```
+src/
+└── backtesting/
+    ├── BacktestRunner.ts
+    ├── SimulatedClock.ts
+    ├── WalkForwardController.ts
+    │
+    ├── feed/
+    │   ├── HistoricalDataFeed.ts
+    │   ├── ReplayController.ts
+    │   ├── ReplayTickFeed.ts
+    │   ├── ReplayCandleFeed.ts
+    │   └── EventMerger.ts
+    │
+    ├── simulator/
+    │   ├── EntrySimulator.ts
+    │   ├── ExitSimulator.ts
+    │   ├── SLManager.ts
+    │   └── TargetManager.ts
+    │
+    ├── tracker/
+    │   ├── PositionTracker.ts
+    │   ├── TradeStateMachine.ts
+    │   └── EquityCurveWriter.ts
+    │
+    ├── costs/
+    │   ├── CostAggregator.ts
+    │   ├── CostConfig.ts
+    │   ├── interfaces/
+    │   │   ├── IBrokerageModel.ts
+    │   │   ├── ISlippageModel.ts
+    │   │   ├── ITransactionCostModel.ts
+    │   │   └── ICostResult.ts
+    │   ├── brokerage/
+    │   │   ├── ZeroBrokerageProfile.ts
+    │   │   ├── FlatFeeProfile.ts
+    │   │   └── PercentageProfile.ts
+    │   ├── slippage/
+    │   │   ├── ZeroSlippageModel.ts
+    │   │   ├── FixedPaiseModel.ts
+    │   │   ├── PercentageModel.ts
+    │   │   ├── SpreadModel.ts
+    │   │   └── VolumeAdjustedModel.ts
+    │   └── transaction/
+    │       ├── TransactionCostModel.ts
+    │       ├── SegmentRouter.ts
+    │       └── rates/
+    │           ├── EquityRates.ts
+    │           ├── FuturesRates.ts
+    │           ├── OptionsRates.ts
+    │           └── CommodityRates.ts
+    │
+    ├── risk/
+    │   ├── RiskValidationPipeline.ts
+    │   ├── RiskState.ts
+    │   └── stages/
+    │       ├── PositionSizingStage.ts
+    │       ├── DailyLossStage.ts
+    │       ├── MaxDrawdownStage.ts
+    │       ├── ExposureStage.ts
+    │       ├── ConcurrentPositionStage.ts
+    │       └── MarginAvailabilityStage.ts
+    │
+    ├── analytics/
+    │   ├── AnalyticsEngine.ts
+    │   ├── TradeSetBuilder.ts
+    │   ├── EquitySeriesBuilder.ts
+    │   ├── AnalyticsWriter.ts
+    │   ├── metrics/
+    │   │   ├── WinRateMetric.ts
+    │   │   ├── ProfitFactorMetric.ts
+    │   │   ├── SharpeSortinoMetric.ts
+    │   │   ├── MaxDrawdownMetric.ts
+    │   │   ├── CAGRMetric.ts
+    │   │   ├── ExpectancyMetric.ts
+    │   │   └── CalmarMetric.ts
+    │   └── interfaces/
+    │       ├── IMetric.ts
+    │       ├── ITradeSet.ts
+    │       └── IEquitySeries.ts
+    │
+    ├── reports/
+    │   ├── ReportOrchestrator.ts
+    │   ├── ReportRegistry.ts
+    │   ├── builders/
+    │   │   ├── IReportBuilder.ts
+    │   │   ├── EquityCurveBuilder.ts
+    │   │   ├── TradeListBuilder.ts
+    │   │   ├── DrawdownReportBuilder.ts
+    │   │   ├── StrategySummaryBuilder.ts
+    │   │   └── MonthlyPerformanceBuilder.ts
+    │   ├── contracts/
+    │   │   ├── ReportRequest.ts
+    │   │   ├── ReportType.ts
+    │   │   ├── EquityCurveReportData.ts
+    │   │   ├── TradeListReportData.ts
+    │   │   ├── DrawdownReportData.ts
+    │   │   ├── StrategySummaryReportData.ts
+    │   │   └── MonthlyPerformanceReportData.ts
+    │   └── helpers/
+    │       ├── DateSeriesHelper.ts
+    │       ├── DrawdownScanner.ts
+    │       └── PaginationHelper.ts
+    │
+    ├── config/
+    │   ├── BacktestConfig.ts
+    │   └── FoldConfig.ts
+    │
+    └── interfaces/
+        ├── IBarEvent.ts               ← extend to EnrichedBarEvent (Correction 3)
+        ├── IFillModel.ts
+        └── IBacktestWriter.ts
+```
+
+---
+
+## Interfaces and Contracts
+
+### Core engine contracts
+
+**`IMarketDataProvider`** (Phase 2B — implemented by `HistoricalDataFeed`)  
+`subscribe(symbolId, mode, callback)`, `unsubscribe(symbolId)`, `connect()`, `disconnect()`
+
+**`IBarEvent`** (Phase 4A — extend to `EnrichedBarEvent` per Correction 3)  
+`{ symbol: string, timeframe: Timeframe, open: number, high: number, low: number, close: number, volume: bigint, bucket_ts: Date }`
+
+**`EnrichedBarEvent`** (Correction 3 — Phase 5 adds indicator values)  
+Extends `IBarEvent` with `indicators?: Map<string, number>`
+
+**`IFillModel`**  
+`fill(order: OrderRequest, bar: BarData, lastTick?: TickData): FillResult`
+
+**`IBacktestWriter`**  
+`writeTrade(trade)`, `writeOrder(order)`, `writeExecution(execution)`, `writePosition(position)`, `writeLearningRecord(lr)`
+
+### Risk contracts
+
+**`RiskValidationResult`**  
+`{ passed: boolean, stage: 1|2|3|4|5|6, reason: string|null, adjusted_qty: number|null, detail: string }`
+
+**`RiskState`** (in-memory, not persisted between sessions)  
+See Phase 4E for full field list.
+
+### Cost contracts
+
+**`ICostResult`**  
+`{ fill_price, slippage_paise, brokerage_paise, stt_paise, exchange_paise, sebi_fee_paise, stamp_paise, gst_paise, total_cost_paise, effective_price, options_exercise: boolean }`
+
+**`IBrokerageModel`**  
+`compute(order: OrderRequest, turnover: number): BrokerageResult`
+
+**`ISlippageModel`**  
+`compute(order: OrderRequest, ctx: FillContext): SlippageResult`
+
+**`ITransactionCostModel`**  
+`compute(order: OrderRequest, brokerage: BrokerageResult): TransactionCostResult`
+
+### Analytics contracts
+
+**`IMetric`**  
+`compute(tradeSet: ITradeSet, equitySeries: IEquitySeries, priorResults?: ResultMap): MetricResult`
+
+**`MetricResult`**  
+`{ value: number|null, reason: string|null }`
+
+### Report contracts
+
+**`IReportBuilder`**  
+`reportType: ReportType`, `build(request: ReportRequest): Promise<ReportData>`
+
+**`ReportRequest`**  
+`{ run_id: uuid, report_types: ReportType[], period_start?: Date, period_end?: Date, page?: number, page_size?: number }`
+
+**`ReportType`** enum  
+`equity_curve | trade_list | drawdown | strategy_summary | monthly_performance`
+
+### Signal and simulation contracts (consumed by Phase 4, produced by Phase 5)
+
+**`SignalEvent`** (Phase 4C contract — Phase 5 must emit exactly this)  
+`{ signal_id: uuid, symbol_id: uuid, strategy_run_id: uuid, signal_type: string, direction: 'LONG'|'SHORT', strength: number, entry_price_hint: number, stop_loss: number|null, take_profit: number|null, kelly_fraction: number, regime: string, features: object, fired_at: Date }`
+
+---
+
+## Database Dependencies
+
+All tables read or written by Phase 4 components. All defined in Phase 3.
+
+| Table | Phase | Used by | Operation |
+|---|---|---|---|
+| `symbols` | 3B | All builders, `EntrySimulator` | Read |
+| `ticks` | 3B | `ReplayTickFeed` | Read |
+| `candles` | 3B | `ReplayCandleFeed`, `EquityCurveBuilder` | Read |
+| `strategy_runs` | 3C (+ corrections) | `BacktestRunner`, all builders | Read + Write |
+| `signals` | 3C | `SignalEngine` (Phase 5), `TradeListBuilder` | Read + Write |
+| `trades` | 3C (+ Correction 1) | `EntrySimulator`, `ExitSimulator`, all analytics | Read + Write |
+| `orders` | 3C | `EntrySimulator` | Write |
+| `executions` | 3C | `EntrySimulator`, `ExitSimulator` | Write (append-only) |
+| `positions` | 3D | `PositionTracker` | Write |
+| `portfolios` | 3D | `RiskValidationPipeline` stage 6 | Read |
+| `equity_curve` | 3D | `EquityCurveWriter`, all curve/drawdown builders | Read + Write |
+| `performance_metrics` | 3D | `AnalyticsWriter`, `StrategySummaryBuilder`, `MonthlyPerformanceBuilder` | Read + Write |
+| `learning_records` | 3E | `PositionTracker` (on close), `StrategySummaryBuilder` | Read + Write |
+| `strategy_performance` | 3E | `SignalEngine` (Phase 5) | Read |
+| `regime_performance` | 3E | `SignalEngine` (Phase 5) | Read |
+| `risk_limits` | 3G (M6) | `RiskValidationPipeline` | Read |
+
+---
+
+## Integration Requirements for Phase 5
+
+Phase 5 must honour every contract defined by Phase 4 without modification to Phase 4 components.
+
+### Hard requirements
+
+1. **`StrategyDefinition` type and `parameter_snapshot` JSONB schema** must be defined as Phase 5A's first output. All subsequent Phase 5 work keys off this.
+
+2. **`EnrichedBarEvent`** must extend `IBarEvent` with `indicators?: Map<string, number>` and be backward-compatible with existing Phase 4 `BarEvent` consumers.
+
+3. **`SignalEngine` must emit `SignalEvent`** with exactly the shape defined in Phase 4C. No field additions or removals without corresponding update to Phase 4C's `EntrySimulator` contract.
+
+4. **`RegimeEngine` must expose `resetBuffer()`** callable by `BacktestRunner` and `WalkForwardController` at fold boundaries and `seekTo()` events.
+
+5. **`warmup_bars`** must be defined as a field in `BacktestConfig` and enforced during the first N bars after fold start and after `seekTo()`. Signal evaluation must be suppressed during warmup.
+
+6. **`RiskEngine` must return `RiskValidationResult`** with exactly the shape defined in Phase 4E.
+
+7. **`IndicatorPipeline` must use incremental (online) algorithms** for all rolling computations. Naive O(n) per bar recomputation is not acceptable at 1-minute granularity.
+
+8. **`risk_limits` table must be populated** by the strategy definition before `BacktestRunner` is called. The pipeline reads it at stage 1–6 initialisation.
+
+### Recommended sequence
+
+Phase 5A: `StrategyDefinition`, `parameter_snapshot` schema, `EnrichedBarEvent`  
+Phase 5B: `IIndicator`, `IndicatorBuffer`, `IndicatorPipeline`, 8 foundational indicators  
+Phase 5C: `RegimeEngine` — regime classification from indicator values, `resetBuffer()`, `warmup_bars`  
+Phase 5D: `SignalEngine` — regime-conditional weighting, Kelly fraction, `SignalEvent` emission  
+Phase 5E: End-to-end integration — one concrete strategy through `BacktestRunner`; first real backtest  
+Phase 5F: Parameter optimiser — grid search over `StrategyDefinition` parameter schema  
+Phase 5G: Walk-forward fold parallelisation (scalability concern S1)
+
+---
+
+## Phase Completion Status
+
+| Phase | Title | Status |
+|---|---|---|
+| 4A | Backtesting Engine Architecture | Complete |
+| 4B | Historical Data Replay System | Complete |
+| 4C | Trade Simulation Engine | Complete |
+| 4D | Transaction Cost Models | Complete |
+| 4E | Risk Validation Pipeline | Complete |
+| 4F | Performance Analytics | Complete |
+| 4G | Backtesting Report System | Complete |
+| 4H | Architecture Review and Audit | Complete |
+
+---
+
+## Final Verdict
+
+**Phase 4 is CONDITIONALLY COMPLETE and ready for Phase 5.**
+
+The backtesting engine architecture is sound, internally consistent, and correctly layered across all eight sub-phases. The engine defines clear contracts for every interface Phase 5 must satisfy. Three schema corrections (`close_reason`, `reports_jsonb`, `EnrichedBarEvent`) are required before Phase 5 implementation begins and are trivial in scope. Three component gaps (strategy registry, indicator library, parameter optimiser) are deliberate deferrals — Phase 4 defines what these must produce; Phase 5 designs how they produce it.
+
+No phase contains a design flaw requiring rework. All Phase 3 database dependencies are satisfied by the schema delivered in Phases 3A–3G. The Phase 2 AngelOne adapter interface is correctly reused without modification.
+
+**Pre-Phase 5 checklist:**
+
+- [ ] Apply migration `016_close_reason.sql` — add `close_reason varchar(30)` to `trades`
+- [ ] Apply migration `017_strategy_runs_reports.sql` — add `reports_jsonb` to `strategy_runs` (or create `backtest_reports` table — see S4)
+- [ ] Extend `src/backtesting/interfaces/IBarEvent.ts` with optional `indicators` field
+- [ ] Review `TradeListBuilder` pagination — move `LIMIT/OFFSET` to repository layer before large backtests
+- [ ] Confirm `risk_limits` table seeding strategy for Phase 5 strategy definitions
+
+---
+
+*Document generated from Phase 4 architecture sessions (4A–4H). Do not modify architecture decisions in this document — create a Phase 4 amendment document for any post-audit corrections.*
