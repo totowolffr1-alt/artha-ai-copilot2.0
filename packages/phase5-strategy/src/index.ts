@@ -14,4 +14,9 @@ export * from './signals/TransactionCostModel';
 export * from './signals/MarketSessionGuard';
 export * from './journal/PerformanceAnalytics';
 export * from './journal/TradeJournalEngine';
+export * from './strategies/IStrategy';
+export * from './strategies/TrendFollowerStrategy';
+export * from './strategies/MeanReversionStrategy';
+export * from './strategies/VolatilitySqueezeStrategy';
+export * from './strategies/StrategyRouter';
 
