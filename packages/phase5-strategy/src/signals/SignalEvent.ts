@@ -3,6 +3,8 @@
  * Artha AI — Signal Event contract emitted by the Signal Engine
  */
 
+import { SessionStatus } from './MarketSessionGuard';
+
 export type SignalDirection = 'LONG' | 'SHORT';
 export type SignalStrength  = 'WEAK' | 'MODERATE' | 'STRONG';
 
@@ -33,6 +35,9 @@ export interface SignalEvent {
   readonly recommended_qty?:    number;        // Risk & Volatility sized quantity
   readonly risk_amount?:        number;        // Rupee risk at stop loss
   readonly kelly_fraction?:     number;        // Quarter-Kelly fraction
+
+  // Market Session Context
+  readonly session_status?:     SessionStatus; // NSE session at signal emission
 
   readonly emitted_at:  Date;
   readonly bar_ts:      Date;          // candle bucket timestamp

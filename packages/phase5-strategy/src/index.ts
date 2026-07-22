@@ -10,4 +10,6 @@ export * from './signals/SignalEngine';
 export * from './signals/RegimeEngine';
 export * from './signals/PositionSizer';
 export * from './signals/SmallCapSignalFilter';
+export * from './signals/TransactionCostModel';
+export * from './signals/MarketSessionGuard';
 

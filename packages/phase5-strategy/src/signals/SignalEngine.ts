@@ -2,13 +2,19 @@ import { IndicatorPipeline, IndicatorSnapshot } from '../indicators/IndicatorPip
 import { SignalEvent, SignalDirection, SignalStrength } from './SignalEvent';
 import { RegimeEngine, RegimeClassification } from './RegimeEngine';
 import { PositionSizer } from './PositionSizer';
+import { MarketSessionGuard } from './MarketSessionGuard';
+
+/** Minimum milliseconds between two signals for the same symbol (5 minutes) */
+const SIGNAL_COOLDOWN_MS = 5 * 60 * 1000;
 
 export class SignalEngine {
-  private readonly pipelines = new Map<string, IndicatorPipeline>();
-  private readonly prevRsi = new Map<string, number>();
-  private readonly regimeEngine = new RegimeEngine();
-  private readonly positionSizer = new PositionSizer();
-  private portfolioEquity: number = 1000000; // Default ₹1,000,000 for sizing
+  private readonly pipelines        = new Map<string, IndicatorPipeline>();
+  private readonly prevRsi          = new Map<string, number>();
+  private readonly regimeEngine     = new RegimeEngine();
+  private readonly positionSizer    = new PositionSizer();
+  /** Per-symbol cooldown tracker: last signal emission timestamp (ms) */
+  private readonly lastSignalTime   = new Map<string, number>();
+  private portfolioEquity: number   = 1_000_000; // Default ₹10L
 
   setPortfolioEquity(equity: number): void {
     this.portfolioEquity = Math.max(0, equity);
@@ -30,6 +36,17 @@ export class SignalEngine {
       this.pipelines.set(symbol, new IndicatorPipeline());
     }
 
+    // ── Market Session Gate ───────────────────────────────────────
+    // Skip signal generation outside NSE trading hours (IST).
+    // barTs is used so backtests on historical data respect session rules.
+    const barTsMs = barTs.getTime();
+    const session = MarketSessionGuard.getSessionInfo(barTsMs);
+    if (!session.canTrade) {
+      // Still feed the pipeline to keep indicators warm
+      this.pipelines.get(symbol)!.feed(open, high, low, close, volume);
+      return null;
+    }
+
     const pipeline = this.pipelines.get(symbol)!;
     const snap = pipeline.feed(open, high, low, close, volume);
 
@@ -39,6 +56,14 @@ export class SignalEngine {
     // Suppress signals during indicator/regime warmup
     if (regime.label === 'WARMUP') {
       this.prevRsi.set(symbol, snap.rsi14);
+      return null;
+    }
+
+    // ── Per-Symbol Signal Cooldown ────────────────────────────────
+    // Prevent signal spam: once a signal is emitted for a symbol,
+    // suppress further signals for that symbol for SIGNAL_COOLDOWN_MS.
+    const lastTs = this.lastSignalTime.get(symbol) ?? 0;
+    if (barTsMs - lastTs < SIGNAL_COOLDOWN_MS) {
       return null;
     }
 
@@ -136,6 +161,9 @@ export class SignalEngine {
       atr14: snap.atr14,
     });
 
+    // ── Stamp cooldown timestamp before emitting ──────────────────
+    this.lastSignalTime.set(symbol, barTsMs);
+
     const generatedSignal: SignalEvent = {
       signal_id: `sig-${Math.random().toString(36).substring(2, 11)}`,
       symbol,
@@ -157,7 +185,8 @@ export class SignalEngine {
       risk_amount: sizingResult.riskAmount,
       kelly_fraction: sizingResult.kellyFraction,
       emitted_at: new Date(),
-      bar_ts: barTs
+      bar_ts: barTs,
+      session_status: session.status,
     };
 
     return generatedSignal;
@@ -166,6 +195,7 @@ export class SignalEngine {
   resetSymbol(symbol: string): void {
     this.pipelines.get(symbol)?.reset();
     this.prevRsi.delete(symbol);
+    this.lastSignalTime.delete(symbol);
   }
 }
 
