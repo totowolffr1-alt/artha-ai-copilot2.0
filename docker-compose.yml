@@ -1,15 +1,60 @@
-version: "3.9"
+version: "3.8"
 
-# Not required to run the app today — Phase 3 (Database Layer) is design-doc
-# only in the current project, no migrations or schema exist yet. This is
-# here so Postgres/TimescaleDB is one command away once that phase is built.
 services:
+  # ── Artha AI Backend API ───────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: artha-api
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DEMO_MODE=${DEMO_MODE:-false}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - SMARTAPI_CLIENT_ID=${SMARTAPI_CLIENT_ID}
+      - SMARTAPI_PASSWORD=${SMARTAPI_PASSWORD}
+      - SMARTAPI_API_KEY=${SMARTAPI_API_KEY}
+      - SMARTAPI_TOTP_SECRET=${SMARTAPI_TOTP_SECRET}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+    volumes:
+      - artha_dbdata:/app/apps/api/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Artha AI Web Copilot Frontend ──────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: artha-web
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── TimescaleDB Historical Bar Store (Optional) ────────────────────────────
   postgres:
     image: timescale/timescaledb:latest-pg16
+    container_name: artha-timescaledb
     restart: unless-stopped
     environment:
       POSTGRES_USER: artha
-      POSTGRES_PASSWORD: artha_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-artha_prod_secure_pass}
       POSTGRES_DB: artha
     ports:
       - "5432:5432"
@@ -17,4 +62,5 @@ services:
       - artha_pgdata:/var/lib/postgresql/data
 
 volumes:
+  artha_dbdata:
   artha_pgdata:

@@ -16,10 +16,12 @@ import { RegimeClassification } from '../signals/RegimeEngine';
 import { SignalEvent } from '../signals/SignalEvent';
 import { PositionSizer } from '../signals/PositionSizer';
 import { MarketSessionGuard } from '../signals/MarketSessionGuard';
+import { SentimentFusionEngine, NewsItem } from '../intelligence/SentimentFusionEngine';
 
 export class StrategyRouter {
   private readonly strategies: IStrategy[] = [];
   private readonly positionSizer = new PositionSizer();
+  private readonly sentimentFusion = new SentimentFusionEngine();
   private portfolioEquity: number = 1_000_000;
 
   constructor() {
@@ -39,6 +41,7 @@ export class StrategyRouter {
 
   /**
    * Evaluates all registered strategies for a bar and returns the best SignalEvent, or null.
+   * @param newsItems Optional recent news items for sentiment fusion
    */
   route(
     symbol: string,
@@ -46,7 +49,8 @@ export class StrategyRouter {
     snapshot: IndicatorSnapshot,
     regime: RegimeClassification,
     volume: number,
-    barTs: Date = new Date()
+    barTs: Date = new Date(),
+    newsItems: NewsItem[] = []
   ): SignalEvent | null {
     // 1. Session Gate check
     const session = MarketSessionGuard.getSessionInfo(barTs.getTime());
@@ -68,7 +72,21 @@ export class StrategyRouter {
     candidateSignals.sort((a, b) => b.rawConfidence - a.rawConfidence);
     const bestSignal = candidateSignals[0];
 
-    // 5. Calculate dynamic position size via PositionSizer
+    // 5. Apply Sentiment Fusion — adjust confidence based on news sentiment alignment
+    const fusion = this.sentimentFusion.fuse(
+      symbol,
+      bestSignal.direction,
+      bestSignal.rawConfidence,
+      newsItems
+    );
+
+    // If sentiment strongly vetoes the signal, suppress it
+    if (fusion.veto) {
+      console.warn(`[StrategyRouter] Signal VETOED for ${symbol}: ${fusion.vetoreason}`);
+      return null;
+    }
+
+    // 6. Calculate dynamic position size via PositionSizer
     const sizing = this.positionSizer.calculate({
       portfolioEquity: this.portfolioEquity,
       entryPrice: bestSignal.entryPrice,
@@ -82,7 +100,7 @@ export class StrategyRouter {
       exchange: 'NSE',
       direction: bestSignal.direction,
       strength: bestSignal.strength,
-      confidence: bestSignal.rawConfidence,
+      confidence: fusion.adjustedConfidence,  // sentiment-fused confidence
       entry_price: bestSignal.entryPrice,
       stop_loss: bestSignal.stopLossPrice,
       take_profit: bestSignal.takeProfitPrice,
@@ -97,6 +115,9 @@ export class StrategyRouter {
       risk_amount: sizing.riskAmount,
       kelly_fraction: sizing.kellyFraction,
       session_status: session.status,
+      sentiment_score: fusion.sentimentScore,
+      sentiment_direction: fusion.direction,
+      sentiment_news_count: fusion.newsCount,
       emitted_at: new Date(),
       bar_ts: barTs,
     };

@@ -39,6 +39,11 @@ export interface SignalEvent {
   // Market Session Context
   readonly session_status?:     SessionStatus; // NSE session at signal emission
 
+  // Phase 18: Sentiment Fusion — news-adjusted confidence metadata
+  readonly sentiment_score?:        number;   // -1 to +1 aggregate news sentiment
+  readonly sentiment_direction?:    'ALIGNED' | 'COUNTER' | 'NEUTRAL';
+  readonly sentiment_news_count?:   number;   // # of news items used in fusion
+
   readonly emitted_at:  Date;
   readonly bar_ts:      Date;          // candle bucket timestamp
 }

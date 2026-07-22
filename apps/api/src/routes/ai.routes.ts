@@ -2,6 +2,12 @@ import { Router, Request, Response } from 'express';
 import Groq from 'groq-sdk';
 import { fetchLastPrice } from '../services/priceCache';
 import { getRecentNews } from './news.routes';
+import {
+  generateTradeRationale,
+  generateRegimeCommentary,
+  type SignalContext,
+  type RegimeContext,
+} from '../services/llmIntelligenceService';
 
 export const aiRouter = Router();
 
@@ -415,4 +421,49 @@ aiRouter.get('/daily-briefing', (_req: Request, res: Response) => {
     open_positions: 0,
     kill_switch_active: false,
   });
+});
+
+// ── Phase 18: Trade Rationale Endpoint ───────────────────────────────────────
+// POST /api/ai/trade-rationale
+// Body: SignalContext (symbol, direction, strategy, confidence, regime, entryPrice, takeProfit, stopLoss, riskRewardRatio)
+aiRouter.post('/trade-rationale', async (req: Request, res: Response) => {
+  const ctx: SignalContext = req.body;
+  if (!ctx?.symbol || !ctx?.direction || !ctx?.entryPrice) {
+    return res.status(400).json({ error: 'symbol, direction, and entryPrice are required' });
+  }
+  try {
+    // Enrich with recent news headlines for this symbol
+    const recentNews = getRecentNews(10);
+    const symbolNews = recentNews
+      .filter(n => !n.symbol || n.symbol.toUpperCase() === ctx.symbol.toUpperCase())
+      .slice(0, 5)
+      .map(n => n.headline);
+    const enrichedCtx: SignalContext = { ...ctx, newsHeadlines: symbolNews };
+    const rationale = await generateTradeRationale(enrichedCtx);
+    return res.json({ symbol: ctx.symbol, direction: ctx.direction, rationale });
+  } catch (err: any) {
+    console.error('[AI Route] /trade-rationale error:', err?.message);
+    return res.status(500).json({ error: 'Rationale generation failed', details: err?.message });
+  }
+});
+
+// ── Phase 18: Regime Commentary Endpoint ─────────────────────────────────────
+// POST /api/ai/regime-commentary
+// Body: RegimeContext (regime, optional metrics)
+aiRouter.post('/regime-commentary', async (req: Request, res: Response) => {
+  const ctx: RegimeContext = req.body;
+  if (!ctx?.regime) {
+    return res.status(400).json({ error: 'regime field is required' });
+  }
+  // Inject current watchlist as topSymbols if not supplied
+  if (!ctx.topSymbols || ctx.topSymbols.length === 0) {
+    ctx.topSymbols = Array.from(sessionWatchlist).slice(0, 6);
+  }
+  try {
+    const commentary = await generateRegimeCommentary(ctx);
+    return res.json({ commentary });
+  } catch (err: any) {
+    console.error('[AI Route] /regime-commentary error:', err?.message);
+    return res.status(500).json({ error: 'Regime commentary generation failed', details: err?.message });
+  }
 });
