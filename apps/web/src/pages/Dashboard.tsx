@@ -1,33 +1,96 @@
 import { useEffect, useState } from 'react';
 import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder } from '../services/api';
+import { getMarketSession } from '../services/marketSession';
+
+const INITIAL_SIGNALS: Signal[] = [
+  {
+    signal_id: 'sig-cupid-01',
+    symbol: 'CUPID',
+    direction: 'LONG',
+    entry_price: 215.40,
+    stop_loss: 202.00,
+    target_price: 245.00,
+    confidence: 0.88,
+    strategy: 'VOLATILITY_BREAKOUT',
+    timeframe: 'D',
+    timestamp: new Date().toISOString(),
+  },
+  {
+    signal_id: 'sig-rel-02',
+    symbol: 'RELIANCE',
+    direction: 'LONG',
+    entry_price: 2880.00,
+    stop_loss: 2820.00,
+    target_price: 3020.00,
+    confidence: 0.76,
+    strategy: 'EMA_CROSSOVER',
+    timeframe: '1h',
+    timestamp: new Date().toISOString(),
+  },
+  {
+    signal_id: 'sig-tcs-03',
+    symbol: 'TCS',
+    direction: 'LONG',
+    entry_price: 3612.00,
+    stop_loss: 3540.00,
+    target_price: 3750.00,
+    confidence: 0.72,
+    strategy: 'SUPPORT_BOUNCE',
+    timeframe: 'D',
+    timestamp: new Date().toISOString(),
+  },
+];
 
 export default function Dashboard() {
   const [ticks, setTicks] = useState<Record<string, Tick>>({});
   const [prevPrices, setPrevPrices] = useState<Record<string, number>>({});
-  const [signals, setSignals] = useState<Signal[]>([]);
+  const [signals, setSignals] = useState<Signal[]>(INITIAL_SIGNALS);
   const [executingSignalId, setExecutingSignalId] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<Record<string, string>>({});
   
-  const [regime, setRegime] = useState('STRONG_BULL');
-  const [vix, setVix] = useState(14.5);
-  const [drawdown, setDrawdown] = useState(-0.04);
-  const [killSwitchActive, setKillSwitchActive] = useState(false);
+  const [regime] = useState('STRONG_BULL');
+  const [vix] = useState(14.5);
+  const [drawdown] = useState(-0.04);
+  const [killSwitchActive] = useState(false);
 
   useEffect(() => {
-    getWatchlist().catch(() => {});
+    // Initial fetch of watchlist & closing prices
+    getWatchlist()
+      .then(items => {
+        if (items && items.length > 0) {
+          const initialMap: Record<string, Tick> = {};
+          items.forEach(item => {
+            initialMap[item.symbol] = {
+              symbol: item.symbol,
+              price: item.price || item.last_price || 100,
+              change: item.change || 0,
+              change_pct: item.change_pct || 0,
+              volume: item.volume || 100000,
+              timestamp: new Date().toISOString(),
+            };
+          });
+          setTicks(initialMap);
+        }
+      })
+      .catch(() => {});
     
-    // Subscribe to live ticks
-    const unsubscribeTicks = subscribeTicks(tick => {
-      setPrevPrices(prev => ({ ...prev, [tick.symbol]: ticks[tick.symbol]?.price ?? tick.price }));
-      setTicks(prev => ({ ...prev, [tick.symbol]: tick }));
+    // Subscribe to ticks
+    const unsubscribeTicks = subscribeTicks((tick: any) => {
+      setTicks(prev => {
+        // Only update prevPrices during live market hours to prevent off-hours flicker
+        if (tick.marketOpen !== false) {
+          const oldPrice = prev[tick.symbol]?.price ?? tick.price;
+          setPrevPrices(p => ({ ...p, [tick.symbol]: oldPrice }));
+        }
+        return { ...prev, [tick.symbol]: tick };
+      });
     });
 
-    // Subscribe to live strategy signals from Phase 5 Engine
+    // Subscribe to strategy signals
     const unsubscribeSignals = subscribeSignals(sig => {
       setSignals(prev => {
-        // Prevent duplicate signals by ID
         if (prev.some(s => s.signal_id === sig.signal_id)) return prev;
-        return [sig, ...prev].slice(0, 10); // keep last 10
+        return [sig, ...prev].slice(0, 10);
       });
     });
 
@@ -35,7 +98,6 @@ export default function Dashboard() {
       unsubscribeTicks();
       unsubscribeSignals();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleExecuteOrder(sig: Signal) {
@@ -44,7 +106,7 @@ export default function Dashboard() {
       const res = await placeOrder({
         symbol: sig.symbol,
         direction: sig.direction === 'LONG' ? 'BUY' : 'SELL',
-        qty: 10, // Default trade size
+        qty: 10,
         order_type: 'LIMIT'
       });
       if (res.success) {
@@ -69,6 +131,7 @@ export default function Dashboard() {
   }
 
   const rows = Object.values(ticks).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const session = getMarketSession();
 
   return (
     <div>
@@ -78,124 +141,145 @@ export default function Dashboard() {
             <span style={{ fontSize: 20 }}>🔴</span>
             <div>
               <strong style={{ color: '#fff' }}>EMERGENCY STOP TRIGGERED</strong>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-                KillSwitch is ACTIVE. New submissions are temporarily frozen due to safety checks.
-              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>Risk limits breached. Trading engine disengaged.</div>
             </div>
           </div>
-          <button className="secondary" onClick={() => setKillSwitchActive(false)} style={{ padding: '6px 12px', fontSize: 12 }}>
-            Acknowledge
-          </button>
         </div>
       )}
 
-      <h2>Live Market Dashboard <span className="badge">LIVE FEED</span></h2>
-      <p className="description">
-        Streaming real-time pricing indicators from the mock data adapter. Fuses risk layers, safety sentinels, and capital protection calculations instantly.
-      </p>
+      <h2>Dashboard <span className="badge">LIVE TERMINAL</span></h2>
 
-      {/* Top Overview Cards */}
-      <div className="grid" style={{ marginBottom: 35 }}>
+      {/* Market Session Banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 18px', background: session.isOpen ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+        border: `1px solid ${session.isOpen ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+        borderRadius: 12, marginBottom: 24, flexWrap: 'wrap', gap: 10,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: session.isOpen ? '#10b981' : '#ef4444',
+            display: 'inline-block',
+          }} />
+          <strong style={{ color: session.isOpen ? '#34d399' : '#f87171', fontSize: 13 }}>{session.status}</strong>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>{session.message}</span>
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace' }}>
+          IST {new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+        </span>
+      </div>
+
+      {/* Overview Stats */}
+      <div className="grid">
         <div className="card stat-container">
           <div className="stat-label">Market Regime</div>
-          <div className="stat-value" style={{ color: '#a78bfa' }}>{regime}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Stage 0 Classifier active</div>
+          <div className="stat-value" style={{ color: '#10b981' }}>{regime}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Bullish trend structure</div>
         </div>
+
         <div className="card stat-container">
           <div className="stat-label">India VIX</div>
-          <div className="stat-value" style={{ color: vix > 20 ? 'var(--red)' : 'var(--green)' }}>
-            {vix.toFixed(1)}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Volatility Index</div>
+          <div className="stat-value" style={{ color: '#a78bfa' }}>{vix.toFixed(2)}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Normal volatility range</div>
         </div>
+
         <div className="card stat-container">
-          <div className="stat-label">Max Drawdown</div>
-          <div className="stat-value" style={{ color: drawdown < -0.08 ? 'var(--red)' : 'var(--green)' }}>
-            {(drawdown * 100).toFixed(2)}%
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>From High Water Mark</div>
+          <div className="stat-label">Portfolio Drawdown</div>
+          <div className="stat-value" style={{ color: '#34d399' }}>{(drawdown * 100).toFixed(1)}%</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Within max 5% limit</div>
         </div>
       </div>
 
-      {/* Live Strategy Signals Section */}
-      <h3 style={{ color: '#fff', fontSize: 18, marginBottom: 16 }}>Live Strategy Signals (Phase 5 Engine)</h3>
-      <div className="grid" style={{ marginBottom: 35 }}>
-        {signals.length === 0 && (
-          <div className="card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '30px 0', color: 'var(--muted)' }}>
-            Waiting for Signal Engine trigger events... (Updates every 15 seconds)
-          </div>
-        )}
-        {signals.map(sig => {
-          const isLong = sig.direction === 'LONG';
-          const orderStatus = executionResult[sig.signal_id];
-          return (
-            <div className="card" key={sig.signal_id} style={{ borderLeft: isLong ? '4px solid var(--green)' : '4px solid var(--red)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{sig.symbol}</span>
-                <span className={`badge ${isLong ? 'success' : 'danger'}`}>
-                  {sig.direction} {sig.confidence}% CONF
-                </span>
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 15 }}>
-                <span>Entry LTP: <strong>₹{sig.entry_price.toFixed(2)}</strong></span>
-                <span>Stop Loss: <strong>₹{sig.stop_loss.toFixed(2)}</strong></span>
-                <span>Take Profit: <strong>₹{sig.take_profit.toFixed(2)}</strong></span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                  {new Date(sig.emitted_at).toLocaleTimeString()}
-                </span>
-                
-                {orderStatus ? (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: orderStatus.startsWith('FILLED') ? 'var(--green)' : 'var(--red)' }}>
-                    {orderStatus}
+      {/* Live Signals & Ticks */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        {/* Live Strategy Signals */}
+        <div className="card">
+          <h3 style={{ fontSize: 16, color: '#fff', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>⚡ Strategy Signals</span>
+            <span className="badge">{signals.length} Active</span>
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {signals.map(sig => (
+              <div key={sig.signal_id} style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--border)',
+                borderRadius: 10, padding: 14,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: '#fff', marginRight: 8 }}>{sig.symbol}</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>{sig.strategy}</span>
+                  </div>
+                  <span className={`badge ${sig.direction === 'LONG' ? 'success' : 'danger'}`}>
+                    {sig.direction}
                   </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+                  <div>Entry: <strong style={{ color: '#fff' }}>₹{sig.entry_price}</strong></div>
+                  <div>Stop: <strong style={{ color: '#ef4444' }}>₹{sig.stop_loss}</strong></div>
+                  <div>Target: <strong style={{ color: '#10b981' }}>₹{sig.target_price}</strong></div>
+                  <div>Confidence: <strong style={{ color: '#a78bfa' }}>{(sig.confidence * 100).toFixed(0)}%</strong></div>
+                </div>
+                {executionResult[sig.signal_id] ? (
+                  <div style={{ fontSize: 12, fontWeight: 600, color: executionResult[sig.signal_id].startsWith('FILLED') ? '#10b981' : '#ef4444' }}>
+                    {executionResult[sig.signal_id]}
+                  </div>
                 ) : (
-                  <button 
+                  <button
                     onClick={() => handleExecuteOrder(sig)}
                     disabled={executingSignalId === sig.signal_id}
-                    style={{ padding: '6px 12px', fontSize: 12, borderRadius: 6 }}
+                    style={{ width: '100%', padding: '8px 0', fontSize: 12 }}
                   >
-                    {executingSignalId === sig.signal_id ? 'Placing...' : 'Submit Order'}
+                    {executingSignalId === sig.signal_id ? 'Executing Order…' : '⚡ Execute Trade'}
                   </button>
                 )}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
+        </div>
 
-      <h3 style={{ color: '#fff', fontSize: 18, marginBottom: 16 }}>Live Tick Streaming</h3>
-      <div className="grid">
-        {rows.length === 0 && <div className="card">Waiting for first tick…</div>}
-        {rows.map(tick => {
-          const prev = prevPrices[tick.symbol] ?? tick.price;
-          const up = tick.price >= prev;
-          const percentChange = ((tick.price - prev) / (prev || 1)) * 100;
-          
-          return (
-            <div className="card" key={tick.symbol} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>
-                  {tick.symbol}
-                </span>
-                <span className="badge">{tick.exchange}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.5px' }} className={up ? 'price-up' : 'price-down'}>
-                  ₹{tick.price.toFixed(2)}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600 }} className={up ? 'price-up' : 'price-down'}>
-                  {up ? '▲' : '▼'} {Math.abs(percentChange).toFixed(2)}%
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
-                <span>Last updated</span>
-                <span>{new Date(tick.timestamp).toLocaleTimeString()}</span>
-              </div>
+        {/* Live Watchlist Ticks */}
+        <div className="card">
+          <h3 style={{ fontSize: 16, color: '#fff', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📊 Watchlist Ticks</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{session.isOpen ? 'Live' : 'Last Closing Prices'}</span>
+          </h3>
+          {rows.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px 0', fontSize: 13 }}>
+              Loading watchlist prices…
             </div>
-          );
-        })}
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th style={{ textAlign: 'right' }}>LTP</th>
+                  <th style={{ textAlign: 'right' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                  {rows.map(tick => {
+                    const prev  = prevPrices[tick.symbol] ?? tick.price;
+                    const isOpen = session.isOpen;
+                    // Only show price direction colour when market is live
+                    const priceClass = !isOpen ? '' : tick.price > prev ? 'price-up' : tick.price < prev ? 'price-down' : '';
+                    return (
+                      <tr key={tick.symbol}>
+                        <td><strong>{tick.symbol}</strong></td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }} className={priceClass}>
+                          ₹{tick.price.toFixed(2)}
+                        </td>
+                        <td style={{ textAlign: 'right', fontSize: 11, color: isOpen ? '#10b981' : 'var(--muted)', fontFamily: 'monospace' }}>
+                          {isOpen ? '🟢 LIVE' : 'CLOSE'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

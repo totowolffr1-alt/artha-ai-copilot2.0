@@ -1,0 +1,764 @@
+{
+  "notifications": [
+    {
+      "id": 15,
+      "read": false,
+      "timestamp": "2026-07-21T19:39:38.318Z",
+      "component": "recoveryService",
+      "severity": "INFO",
+      "title": "System Recovery",
+      "message": "Auto-Recovery: news_engine — restart_news_worker completed"
+    },
+    {
+      "id": 14,
+      "read": false,
+      "timestamp": "2026-07-21T19:38:21.910Z",
+      "component": "portfolio_engine",
+      "severity": "INFO",
+      "title": "Health Status Changed",
+      "message": "portfolio_engine changed from DEGRADED to HEALTHY"
+    },
+    {
+      "id": 13,
+      "read": false,
+      "timestamp": "2026-07-21T19:38:21.910Z",
+      "component": "broker_api",
+      "severity": "INFO",
+      "title": "Health Status Changed",
+      "message": "broker_api changed from CRITICAL to HEALTHY"
+    },
+    {
+      "id": 12,
+      "read": false,
+      "timestamp": "2026-07-21T19:34:57.189Z",
+      "component": "recoveryService",
+      "severity": "INFO",
+      "title": "System Recovery",
+      "message": "Auto-Recovery: market_data — reconnect_websocket completed"
+    },
+    {
+      "id": 11,
+      "read": false,
+      "timestamp": "2026-07-21T19:34:25.173Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "Health Status Changed",
+      "message": "market_data changed from HEALTHY to WARNING"
+    },
+    {
+      "id": 10,
+      "read": false,
+      "timestamp": "2026-07-21T19:34:25.173Z",
+      "component": "broker_api",
+      "severity": "INFO",
+      "title": "Health Status Changed",
+      "message": "broker_api changed from CRITICAL to HEALTHY"
+    },
+    {
+      "id": 9,
+      "read": false,
+      "timestamp": "2026-07-21T19:32:11.398Z",
+      "component": "recoveryService",
+      "severity": "INFO",
+      "title": "System Recovery",
+      "message": "Auto-Recovery: market_data — reconnect_websocket completed"
+    },
+    {
+      "id": 8,
+      "read": false,
+      "timestamp": "2026-07-21T19:31:39.378Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "Health Status Changed",
+      "message": "market_data changed from HEALTHY to WARNING"
+    },
+    {
+      "id": 7,
+      "read": false,
+      "timestamp": "2026-07-21T19:31:39.378Z",
+      "component": "broker_api",
+      "severity": "INFO",
+      "title": "Health Status Changed",
+      "message": "broker_api changed from CRITICAL to HEALTHY"
+    },
+    {
+      "id": 6,
+      "read": false,
+      "timestamp": "2026-07-21T19:21:17.647Z",
+      "component": "recoveryService",
+      "severity": "INFO",
+      "title": "System Recovery",
+      "message": "Auto-Recovery: market_data — reconnect_websocket completed"
+    },
+    {
+      "id": 5,
+      "read": false,
+      "timestamp": "2026-07-21T19:20:45.629Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "Health Status Changed",
+      "message": "market_data changed from HEALTHY to WARNING"
+    },
+    {
+      "id": 4,
+      "read": false,
+      "timestamp": "2026-07-21T19:20:45.629Z",
+      "component": "broker_api",
+      "severity": "INFO",
+      "title": "Health Status Changed",
+      "message": "broker_api changed from CRITICAL to HEALTHY"
+    },
+    {
+      "id": 3,
+      "read": false,
+      "timestamp": "2026-07-21T19:11:34.651Z",
+      "component": "recoveryService",
+      "severity": "INFO",
+      "title": "System Recovery",
+      "message": "Auto-Recovery: market_data — reconnect_websocket completed"
+    },
+    {
+      "id": 2,
+      "read": false,
+      "timestamp": "2026-07-21T19:11:02.631Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "Health Status Changed",
+      "message": "market_data changed from HEALTHY to WARNING"
+    },
+    {
+      "id": 1,
+      "read": false,
+      "timestamp": "2026-07-21T19:11:02.631Z",
+      "component": "broker_api",
+      "severity": "INFO",
+      "title": "Health Status Changed",
+      "message": "broker_api changed from CRITICAL to HEALTHY"
+    }
+  ],
+  "price_alerts": [],
+  "health_history": [
+    {
+      "id": 1,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:10:32.624Z"
+    },
+    {
+      "id": 2,
+      "service": "overall",
+      "score": 87,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:11:02.631Z"
+    },
+    {
+      "id": 3,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:11:32.638Z"
+    },
+    {
+      "id": 4,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:12:02.651Z"
+    },
+    {
+      "id": 5,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:12:32.653Z"
+    },
+    {
+      "id": 6,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:13:02.655Z"
+    },
+    {
+      "id": 7,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:13:32.667Z"
+    },
+    {
+      "id": 8,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:14:02.678Z"
+    },
+    {
+      "id": 9,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:14:32.679Z"
+    },
+    {
+      "id": 10,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:15:02.685Z"
+    },
+    {
+      "id": 11,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:15:32.697Z"
+    },
+    {
+      "id": 12,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:16:02.706Z"
+    },
+    {
+      "id": 13,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:16:32.722Z"
+    },
+    {
+      "id": 14,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:17:02.727Z"
+    },
+    {
+      "id": 15,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:17:32.736Z"
+    },
+    {
+      "id": 16,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:18:02.743Z"
+    },
+    {
+      "id": 17,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:20:15.620Z"
+    },
+    {
+      "id": 18,
+      "service": "overall",
+      "score": 87,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:20:45.629Z"
+    },
+    {
+      "id": 19,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:21:15.634Z"
+    },
+    {
+      "id": 20,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:21:45.635Z"
+    },
+    {
+      "id": 21,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:22:15.636Z"
+    },
+    {
+      "id": 22,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:22:45.652Z"
+    },
+    {
+      "id": 23,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:23:15.656Z"
+    },
+    {
+      "id": 24,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:23:45.671Z"
+    },
+    {
+      "id": 25,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:24:15.675Z"
+    },
+    {
+      "id": 26,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:24:45.688Z"
+    },
+    {
+      "id": 27,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:25:12.907Z"
+    },
+    {
+      "id": 28,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:25:15.690Z"
+    },
+    {
+      "id": 29,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:25:45.698Z"
+    },
+    {
+      "id": 30,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:26:15.701Z"
+    },
+    {
+      "id": 31,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:26:45.705Z"
+    },
+    {
+      "id": 32,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:31:09.370Z"
+    },
+    {
+      "id": 33,
+      "service": "overall",
+      "score": 87,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:31:39.379Z"
+    },
+    {
+      "id": 34,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:32:09.386Z"
+    },
+    {
+      "id": 35,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:33:55.171Z"
+    },
+    {
+      "id": 36,
+      "service": "overall",
+      "score": 87,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:34:25.173Z"
+    },
+    {
+      "id": 37,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:34:55.187Z"
+    },
+    {
+      "id": 38,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:35:25.193Z"
+    },
+    {
+      "id": 39,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:35:55.204Z"
+    },
+    {
+      "id": 40,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:08.138Z"
+    },
+    {
+      "id": 41,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:13.208Z"
+    },
+    {
+      "id": 42,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:14.112Z"
+    },
+    {
+      "id": 43,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:14.632Z"
+    },
+    {
+      "id": 44,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:14.902Z"
+    },
+    {
+      "id": 45,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:15.125Z"
+    },
+    {
+      "id": 46,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:15.349Z"
+    },
+    {
+      "id": 47,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:15.574Z"
+    },
+    {
+      "id": 48,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:15.765Z"
+    },
+    {
+      "id": 49,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:15.957Z"
+    },
+    {
+      "id": 50,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:25.213Z"
+    },
+    {
+      "id": 51,
+      "service": "overall",
+      "score": 82,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:36:55.220Z"
+    },
+    {
+      "id": 52,
+      "service": "overall",
+      "score": 85,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:37:51.911Z"
+    },
+    {
+      "id": 53,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:38:21.910Z"
+    },
+    {
+      "id": 54,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:38:51.918Z"
+    },
+    {
+      "id": 55,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:39:21.923Z"
+    },
+    {
+      "id": 56,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-21T19:39:51.936Z"
+    }
+  ],
+  "system_timeline": [
+    {
+      "id": 22,
+      "component": "recoveryService",
+      "event": "Recovered price_cache via retry_price_cache",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:39:50.657Z"
+    },
+    {
+      "id": 21,
+      "component": "recoveryService",
+      "event": "Recovered news_engine via restart_news_worker",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:39:39.843Z"
+    },
+    {
+      "id": 20,
+      "component": "recoveryService",
+      "event": "Recovered news_engine via restart_news_worker",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:39:39.234Z"
+    },
+    {
+      "id": 19,
+      "component": "recoveryService",
+      "event": "Recovered news_engine via restart_news_worker",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:39:38.318Z"
+    },
+    {
+      "id": 18,
+      "component": "portfolio_engine",
+      "event": "Status changed to HEALTHY",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:38:21.910Z"
+    },
+    {
+      "id": 17,
+      "component": "broker_api",
+      "event": "Status changed to HEALTHY",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:38:21.910Z"
+    },
+    {
+      "id": 16,
+      "component": "recoveryService",
+      "event": "Recovered market_data via reconnect_websocket",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:34:57.189Z"
+    },
+    {
+      "id": 15,
+      "component": "market_data",
+      "event": "Status changed to CRITICAL",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:34:55.187Z"
+    },
+    {
+      "id": 14,
+      "component": "market_data",
+      "event": "Status changed to WARNING",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:34:25.173Z"
+    },
+    {
+      "id": 13,
+      "component": "broker_api",
+      "event": "Status changed to HEALTHY",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:34:25.173Z"
+    },
+    {
+      "id": 12,
+      "component": "recoveryService",
+      "event": "Recovered market_data via reconnect_websocket",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:32:11.398Z"
+    },
+    {
+      "id": 11,
+      "component": "market_data",
+      "event": "Status changed to CRITICAL",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:32:09.385Z"
+    },
+    {
+      "id": 10,
+      "component": "market_data",
+      "event": "Status changed to WARNING",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:31:39.378Z"
+    },
+    {
+      "id": 9,
+      "component": "broker_api",
+      "event": "Status changed to HEALTHY",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:31:39.378Z"
+    },
+    {
+      "id": 8,
+      "component": "recoveryService",
+      "event": "Recovered market_data via reconnect_websocket",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:21:17.647Z"
+    },
+    {
+      "id": 7,
+      "component": "market_data",
+      "event": "Status changed to CRITICAL",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:21:15.633Z"
+    },
+    {
+      "id": 6,
+      "component": "market_data",
+      "event": "Status changed to WARNING",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:20:45.629Z"
+    },
+    {
+      "id": 5,
+      "component": "broker_api",
+      "event": "Status changed to HEALTHY",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:20:45.629Z"
+    },
+    {
+      "id": 4,
+      "component": "recoveryService",
+      "event": "Recovered market_data via reconnect_websocket",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:11:34.651Z"
+    },
+    {
+      "id": 3,
+      "component": "market_data",
+      "event": "Status changed to CRITICAL",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:11:32.638Z"
+    },
+    {
+      "id": 2,
+      "component": "market_data",
+      "event": "Status changed to WARNING",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-21T19:11:02.631Z"
+    },
+    {
+      "id": 1,
+      "component": "broker_api",
+      "event": "Status changed to HEALTHY",
+      "severity": "INFO",
+      "recorded_at": "2026-07-21T19:11:02.631Z"
+    }
+  ],
+  "recovery_events": [
+    {
+      "id": 8,
+      "service": "price_cache",
+      "action": "retry_price_cache",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:39:50.657Z"
+    },
+    {
+      "id": 7,
+      "service": "news_engine",
+      "action": "restart_news_worker",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:39:39.843Z"
+    },
+    {
+      "id": 6,
+      "service": "news_engine",
+      "action": "restart_news_worker",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:39:39.234Z"
+    },
+    {
+      "id": 5,
+      "service": "news_engine",
+      "action": "restart_news_worker",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:39:38.318Z"
+    },
+    {
+      "id": 4,
+      "service": "market_data",
+      "action": "reconnect_websocket",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:34:57.189Z"
+    },
+    {
+      "id": 3,
+      "service": "market_data",
+      "action": "reconnect_websocket",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:32:11.398Z"
+    },
+    {
+      "id": 2,
+      "service": "market_data",
+      "action": "reconnect_websocket",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:21:17.647Z"
+    },
+    {
+      "id": 1,
+      "service": "market_data",
+      "action": "reconnect_websocket",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-21T19:11:34.651Z"
+    }
+  ],
+  "push_subscriptions": [
+    {
+      "id": 1,
+      "endpoint": "https://wns2-pn1p.notify.windows.com/w/?token=BQYAAACP719l5So4K05rKa%2bJVigkT3jCNQA3t44Nk6FAy%2fRaF0nAatMHNlfVsq67Vv0eWxbuD1ZumCRBd3wZfWMRqWyAI7hYDm8C3Cu%2bbbxROgDmMqjqeEPptYqJ3uTqUYHvYRH7NDvLpsuryId3mAfHy%2fPLsBQkgFTRIayPgJtAOVYyCfmi1Qy6SwLSrYbj9tUJJ5cnJt3FGWKcKjrak%2bZptAiwi4csA2EXZjEHzainglPKPKOcMAH1KA1WusG7XB81GuMDHN5qjaOTnSAamrp0brSzWvFyH6Dj8Usu2fJBX4JyZz0SK9YKjQ4qP6l1S%2fz3oyhvHNtEfC03w0a0mr5Ll0hr",
+      "p256dh": "BFKnSTWuRE4NG2mP7NU-POgduKhqE3H2sTBNwPVt0oVOYFFvvz3h1NDOyCUz4uj9jh2xDtgscOx67U1f1LcHljI",
+      "auth": "GLaOs0MQjQWgA2sQOVtIZA",
+      "created_at": "2026-07-21T19:25:39.259Z"
+    }
+  ],
+  "_counters": {
+    "health_history": 56,
+    "notifications": 15,
+    "system_timeline": 22,
+    "recovery_events": 8,
+    "push_subscriptions": 1
+  }
+}

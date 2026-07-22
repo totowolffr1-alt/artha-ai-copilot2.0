@@ -54,6 +54,16 @@ export class MockMarketDataAdapter implements IMarketDataAdapter {
     return ok(undefined);
   }
 
+  // ── IST market hours helper ───────────────────────────────────────────────
+  private isMarketOpen(): boolean {
+    const now  = new Date();
+    const ist  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const day  = ist.getDay();                      // 0=Sun, 6=Sat
+    const mins = ist.getHours() * 60 + ist.getMinutes();
+    if (day === 0 || day === 6) return false;        // weekend
+    return mins >= 555 && mins < 930;               // 09:15–15:30 IST
+  }
+
   async disconnect(): Promise<void> {
     this.connected = false;
     if (this.timer) clearInterval(this.timer);
@@ -133,27 +143,36 @@ export class MockMarketDataAdapter implements IMarketDataAdapter {
   // ─── internal tick generator ──────────────────────────────────────────────
 
   private tick(): void {
+    const marketOpen = this.isMarketOpen();
+
     for (const s of WATCHLIST) {
-      const sub = this.subscriptions.get(s.token);
+      const sub  = this.subscriptions.get(s.token);
       const prev = this.lastPrice.get(s.token) ?? s.basePrice;
-      const changePct = (Math.random() - 0.5) * 0.004; // +/-0.2% per tick
-      const price = Math.max(1, prev * (1 + changePct));
-      this.lastPrice.set(s.token, price);
+
+      // ── Only drift prices during live market hours ──────────────────────────
+      let price = prev;
+      if (marketOpen) {
+        const changePct = (Math.random() - 0.5) * 0.004; // +/-0.2% per tick
+        price = Math.max(1, prev * (1 + changePct));
+        this.lastPrice.set(s.token, price);
+      }
+      // When closed: price stays frozen — no update to lastPrice
 
       const raw = {
         token: s.token,
-        ltp: Math.round(price * 100), // paise, matching broker convention
+        ltp: Math.round(price * 100),
         timestamp: Date.now(),
-        volume: Math.floor(Math.random() * 1000),
+        volume: marketOpen ? Math.floor(Math.random() * 1000) : 0,
       } as unknown as RawTick;
 
       this.bus.emit({
         type: 'TICK_RECEIVED',
         tick: {
-          symbol: s.ticker,
-          exchange: s.exchange,
+          symbol:    s.ticker,
+          exchange:  s.exchange,
           price,
           timestamp: new Date().toISOString(),
+          marketOpen,
         },
       } as never);
 

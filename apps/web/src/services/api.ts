@@ -8,13 +8,24 @@ export interface Tick {
 }
 
 export async function getWatchlist() {
-  const res = await fetch(`${BASE}/market/watchlist`);
-  return (await res.json()).watchlist as Array<{ ticker: string; exchange: string }>;
+  try {
+    const res = await fetch(`${BASE}/market/watchlist`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    return data.watchlist as Array<{ ticker: string; exchange: string }>;
+  } catch {
+    return [] as Array<{ ticker: string; exchange: string }>;
+  }
 }
 
 export async function getTicks() {
-  const res = await fetch(`${BASE}/market/ticks`);
-  return (await res.json()).ticks as Tick[];
+  try {
+    const res = await fetch(`${BASE}/market/ticks`);
+    if (!res.ok) throw new Error();
+    return (await res.json()).ticks as Tick[];
+  } catch {
+    return [] as Tick[];
+  }
 }
 
 const BASE_PRICES: Record<string, number> = {

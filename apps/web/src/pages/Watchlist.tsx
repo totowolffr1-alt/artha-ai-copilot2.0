@@ -1,291 +1,438 @@
-import { useEffect, useState } from 'react';
-import { ComposedChart, Line, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { getWatchlist, getCandles } from '../services/api';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import TradingChart from '../components/TradingChart';
+import { watchlistStore, type Watchlist, type WatchlistStock } from '../services/watchlistStore';
+import { getMarketSession } from '../services/marketSession';
 
-interface CandleData {
-  timestamp: string;
+const BASE = '/api';
+
+interface Quote {
+  symbol: string;
+  ltp: number;
   open: number;
   high: number;
   low: number;
-  close: number;
+  prevClose: number;
+  change: number;
+  changePct: number;
   volume: number;
-  sma20?: number;
-  ema50?: number;
 }
 
-// Custom Candlestick shape for Recharts utilizing yAxis.scale
-const CandlestickShape = (props: any) => {
-  const { x, width, payload, yAxis } = props;
-  if (!payload || !yAxis || !yAxis.scale) return null;
-
-  const { open, close, high, low } = payload;
-  const yScale = yAxis.scale;
-
-  const isUp = close >= open;
-  const strokeColor = isUp ? 'var(--green)' : 'var(--red)';
-
-  const bodyTop = yScale(Math.max(open, close));
-  const bodyBottom = yScale(Math.min(open, close));
-  const bodyHeight = Math.max(2, bodyBottom - bodyTop);
-
-  const centerX = x + width / 2;
-
-  return (
-    <g>
-      {/* Wick (vertical line) */}
-      <line
-        x1={centerX}
-        y1={yScale(high)}
-        x2={centerX}
-        y2={yScale(low)}
-        stroke={strokeColor}
-        strokeWidth={1.5}
-      />
-      {/* Body (rectangle) */}
-      <rect
-        x={x}
-        y={bodyTop}
-        width={width}
-        height={bodyHeight}
-        fill={isUp ? 'var(--green)' : 'var(--red)'}
-        stroke={strokeColor}
-        strokeWidth={1}
-      />
-    </g>
-  );
+// Realistic base prices for mock quotes
+const BASE_PRICES: Record<string, number> = {
+  RELIANCE: 2880, TCS: 3600, INFY: 1590, HDFCBANK: 1330, ICICIBANK: 1240,
+  WIPRO: 540, TATAMOTORS: 960, SBIN: 820, BAJFINANCE: 7200, ZOMATO: 265,
+  PAYTM: 880, CUPID: 215, KPITTECH: 1680, BANDHANBNK: 210, IRCTC: 880,
+  ADANIPORTS: 1340, SUNPHARMA: 1720, ASIANPAINT: 2450, TITAN: 3300,
+  LTIM: 5200, HCLTECH: 1750, ONGC: 285, NTPC: 365, HAL: 4100,
 };
 
-const FALLBACK_SYMBOLS = [
-  { ticker: 'RELIANCE', exchange: 'NSE' },
-  { ticker: 'TCS', exchange: 'NSE' },
-  { ticker: 'INFY', exchange: 'NSE' },
-  { ticker: 'CUPID', exchange: 'NSE' },
-  { ticker: 'ZOMATO', exchange: 'NSE' },
-  { ticker: 'HDFCBANK', exchange: 'NSE' },
-];
+function getMockQuote(symbol: string): Quote {
+  const base = BASE_PRICES[symbol] || 500;
+  const session = getMarketSession();
+  // Freeze prices if market is closed — no random movement
+  const seed = session.isOpen ? (Date.now() / 5000) : 0;
+  const rng = Math.sin(seed + symbol.charCodeAt(0) * 9.1) * 0.5 + 0.5;
+  const changePct = session.isOpen ? (rng - 0.5) * 4 : 0;
+  const change = (base * changePct) / 100;
+  const ltp = base + change;
+  return {
+    symbol,
+    ltp: parseFloat(ltp.toFixed(2)),
+    open: parseFloat((base * (1 + (rng * 0.01 - 0.005))).toFixed(2)),
+    high: parseFloat((ltp * 1.015).toFixed(2)),
+    low: parseFloat((ltp * 0.985).toFixed(2)),
+    prevClose: base,
+    change: parseFloat(change.toFixed(2)),
+    changePct: parseFloat(changePct.toFixed(2)),
+    volume: Math.floor((rng * 800000) + 100000),
+  };
+}
 
+// ── Search ────────────────────────────────────────────────────────────────────
+async function searchStocks(q: string): Promise<Array<{ symbol: string; name: string; exchange: string }>> {
+  if (q.length < 1) return [];
+  try {
+    const res = await fetch(`${BASE}/market/search?q=${encodeURIComponent(q)}`);
+    const json = await res.json();
+    return json.results || [];
+  } catch {
+    // Fallback local search
+    const LOCAL = [
+      { symbol: 'RELIANCE', name: 'Reliance Industries Ltd', exchange: 'NSE' },
+      { symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' },
+      { symbol: 'INFY', name: 'Infosys Ltd', exchange: 'NSE' },
+      { symbol: 'HDFCBANK', name: 'HDFC Bank Ltd', exchange: 'NSE' },
+      { symbol: 'CUPID', name: 'Cupid Ltd', exchange: 'NSE' },
+      { symbol: 'ZOMATO', name: 'Zomato Ltd', exchange: 'NSE' },
+      { symbol: 'TATAMOTORS', name: 'Tata Motors Ltd', exchange: 'NSE' },
+      { symbol: 'SBIN', name: 'State Bank of India', exchange: 'NSE' },
+      { symbol: 'IRCTC', name: 'Indian Railway Catering & Tourism', exchange: 'NSE' },
+      { symbol: 'KPITTECH', name: 'KPIT Technologies Ltd', exchange: 'NSE' },
+      { symbol: 'HAL', name: 'Hindustan Aeronautics Ltd', exchange: 'NSE' },
+      { symbol: 'NTPC', name: 'NTPC Ltd', exchange: 'NSE' },
+    ];
+    return LOCAL.filter(s =>
+      s.symbol.toLowerCase().includes(q.toLowerCase()) ||
+      s.name.toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 8);
+  }
+}
+
+// ── Stock Row ─────────────────────────────────────────────────────────────────
+function StockRow({ stock, quote, isSelected, onSelect, onRemove, onPin }: {
+  stock: WatchlistStock;
+  quote: Quote;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onPin: () => void;
+}) {
+  const isUp = quote.changePct >= 0;
+  const color = isUp ? '#10b981' : '#ef4444';
+
+  return (
+    <div onClick={onSelect} style={{
+      display: 'grid',
+      gridTemplateColumns: '28px 1fr 90px 80px 70px 80px 80px 50px',
+      alignItems: 'center', gap: 8,
+      padding: '10px 14px',
+      borderRadius: 8,
+      cursor: 'pointer',
+      background: isSelected ? 'rgba(99,102,241,0.12)' : 'transparent',
+      border: isSelected ? '1px solid rgba(99,102,241,0.3)' : '1px solid transparent',
+      transition: 'all 0.15s ease',
+    }}
+      onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; }}
+      onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+    >
+      {/* Pin */}
+      <button onClick={e => { e.stopPropagation(); onPin(); }} className="secondary" style={{
+        padding: 0, width: 24, height: 24, fontSize: 14, background: 'transparent', border: 'none', boxShadow: 'none',
+        color: stock.pinned ? '#fbbf24' : 'rgba(255,255,255,0.2)',
+      }}>
+        {stock.pinned ? '★' : '☆'}
+      </button>
+
+      {/* Symbol + Exchange */}
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{stock.symbol}</div>
+        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{stock.exchange}</div>
+      </div>
+
+      {/* LTP */}
+      <div style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#fff', fontSize: 13 }}>
+        ₹{quote.ltp.toFixed(2)}
+      </div>
+
+      {/* Change % */}
+      <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color, fontWeight: 600 }}>
+        {isUp ? '+' : ''}{quote.changePct.toFixed(2)}%
+      </div>
+
+      {/* Change ₹ */}
+      <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color }}>
+        {isUp ? '+' : ''}₹{quote.change.toFixed(2)}
+      </div>
+
+      {/* Volume */}
+      <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>
+        {quote.volume > 1e6 ? `${(quote.volume / 1e6).toFixed(1)}M` : `${(quote.volume / 1e3).toFixed(0)}K`}
+      </div>
+
+      {/* High / Low */}
+      <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace', lineHeight: 1.4 }}>
+        <div style={{ color: '#10b981' }}>H {quote.high.toFixed(0)}</div>
+        <div style={{ color: '#ef4444' }}>L {quote.low.toFixed(0)}</div>
+      </div>
+
+      {/* Remove */}
+      <button onClick={e => { e.stopPropagation(); onRemove(); }} className="secondary" style={{
+        padding: 0, width: 24, height: 24, fontSize: 14, background: 'transparent', border: 'none', boxShadow: 'none',
+        color: 'rgba(239,68,68,0.4)',
+      }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,68,68,0.4)')}
+      >✕</button>
+    </div>
+  );
+}
+
+// ── Main Watchlist Page ───────────────────────────────────────────────────────
 export default function Watchlist() {
-  const [symbols, setSymbols] = useState<Array<{ ticker: string; exchange: string }>>(FALLBACK_SYMBOLS);
-  const [selected, setSelected] = useState('RELIANCE');
-  const [candles, setCandles] = useState<CandleData[]>([]);
-  const [timeframe, setTimeframe] = useState('1m');
-  const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null);
+  const [lists, setLists] = useState<Watchlist[]>(watchlistStore.getAll());
+  const [activeListId, setActiveListId] = useState(watchlistStore.getActive());
+  const [selectedSymbol, setSelectedSymbol] = useState('RELIANCE');
+  const [quotes, setQuotes] = useState<Record<string, Quote>>({});
+  const [searchQ, setSearchQ] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string; exchange: string }>>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+  const [session] = useState(getMarketSession());
+  const searchRef = useRef<HTMLDivElement>(null);
 
+  const activeList = lists.find(l => l.id === activeListId) || lists[0];
+
+  const refresh = () => {
+    setLists([...watchlistStore.getAll()]);
+  };
+
+  // Mock quote refresh
   useEffect(() => {
-    getWatchlist()
-      .then(data => { if (data && data.length > 0) setSymbols(data); })
-      .catch(() => { /* keep FALLBACK_SYMBOLS */ });
-  }, [];
+    const update = () => {
+      const all = watchlistStore.getAllSymbols();
+      const q: Record<string, Quote> = {};
+      all.forEach(sym => { q[sym] = getMockQuote(sym); });
+      setQuotes(q);
+    };
+    update();
+    const id = session.isOpen ? setInterval(update, 3000) : undefined;
+    return () => { if (id) clearInterval(id); };
+  }, [session.isOpen]);
 
+  // Search
   useEffect(() => {
-    getCandles(selected).then(rawCandles => {
-      if (!rawCandles || !Array.isArray(rawCandles)) {
-        setCandles([]);
-        return;
+    const t = setTimeout(async () => {
+      if (searchQ.length > 0) {
+        const results = await searchStocks(searchQ);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
       }
-      // Compute indicators dynamically
-      const enriched: CandleData[] = rawCandles.map((c: any, index: number) => {
-        const item: CandleData = { ...c };
-        
-        // Compute SMA20
-        if (index >= 19) {
-          const sum = rawCandles.slice(index - 19, index + 1).reduce((acc: number, val: any) => acc + val.close, 0);
-          item.sma20 = sum / 20;
-        }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [searchQ]);
 
-        // Compute EMA50
-        if (index >= 49) {
-          const k = 2 / (50 + 1);
-          let prevEma = item.close;
-          if (index > 49) {
-            prevEma = enriched[index - 1].ema50 || item.close;
-          }
-          item.ema50 = item.close * k + prevEma * (1 - k);
-        }
-
-        return item;
-      });
-
-      setCandles(enriched);
-      if (enriched.length > 0) {
-        setHoveredCandle(enriched[enriched.length - 1]); // default to latest
+  // Close search on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearch(false);
       }
-    }).catch(() => {});
-  }, [selected, timeframe]);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleAddStock = (symbol: string, exchange: string) => {
+    watchlistStore.addStock(activeListId, symbol, exchange);
+    refresh();
+    setSearchQ('');
+    setShowSearch(false);
+    setSelectedSymbol(symbol);
+  };
+
+  const handleRemove = (symbol: string) => {
+    watchlistStore.removeStock(activeListId, symbol);
+    refresh();
+  };
+
+  const handlePin = (symbol: string) => {
+    watchlistStore.pinStock(activeListId, symbol);
+    refresh();
+  };
+
+  const handleCreateList = () => {
+    const name = prompt('New watchlist name:');
+    if (name) {
+      const wl = watchlistStore.createList(name);
+      setActiveListId(wl.id);
+      watchlistStore.setActive(wl.id);
+      refresh();
+    }
+  };
+
+  const handleDeleteList = (id: string) => {
+    if (!confirm('Delete this watchlist?')) return;
+    watchlistStore.deleteList(id);
+    const remaining = watchlistStore.getAll();
+    setActiveListId(remaining[0]?.id || 'default');
+    refresh();
+  };
+
+  const handleExport = () => {
+    const json = watchlistStore.exportJSON(activeListId);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    a.download = `${activeList?.name || 'watchlist'}.json`;
+    a.click();
+  };
+
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const ok = watchlistStore.importJSON(ev.target?.result as string);
+        if (ok) { refresh(); alert('Watchlist imported!'); }
+        else alert('Invalid watchlist file.');
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  // Sorted stocks: pinned first
+  const stocks = [...(activeList?.stocks || [])].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   return (
     <div>
-      <h2>Interactive Charting Terminal <span className="badge">TradingView Style</span></h2>
-      <p className="description">
-        Professional candlestick charts complete with SMA20/EMA50 overlays, volume bars, and crosshair metrics mapping.
-      </p>
+      <h2>📈 Watchlist <span className="badge">LIVE</span></h2>
 
-      {/* Symbol watch buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, flexWrap: 'wrap', gap: 15 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {symbols.map(s => {
-            const isSelected = selected === s.ticker;
-            return (
-              <button
-                key={s.ticker}
-                onClick={() => setSelected(s.ticker)}
-                className={isSelected ? '' : 'secondary'}
-                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13 }}
-              >
-                {s.ticker}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Timeframe Selectors */}
-        <div style={{ display: 'flex', gap: 6, background: 'rgba(255,255,255,0.03)', padding: 4, borderRadius: 8, border: '1px solid var(--border)' }}>
-          {['1m', '5m', '15m', 'Daily'].map(tf => {
-            const active = timeframe === tf;
-            return (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={active ? '' : 'secondary'}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  boxShadow: 'none',
-                  background: active ? 'var(--accent-gradient)' : 'transparent',
-                  border: 'none'
-                }}
-              >
-                {tf}
-              </button>
-            );
-          })}
-        </div>
+      {/* Session Banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
+        background: session.isOpen ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+        border: `1px solid ${session.isOpen ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+        borderRadius: 10, marginBottom: 20, fontSize: 13,
+      }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
+          background: session.isOpen ? '#10b981' : '#ef4444',
+          boxShadow: session.isOpen ? '0 0 6px #10b981' : 'none',
+          animation: session.isOpen ? 'pulse 1.5s infinite' : 'none',
+        }} />
+        <strong style={{ color: session.isOpen ? '#34d399' : '#f87171' }}>{session.status}</strong>
+        <span style={{ color: 'var(--muted)' }}>{session.message}</span>
+        {!session.isOpen && <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontFamily: 'monospace', fontSize: 12 }}>
+          Prices frozen at close · Next open {new Date(session.nextOpen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })} IST
+        </span>}
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
       </div>
 
-      {/* Info bar showing OHLC details at cursor */}
-      {hoveredCandle && (
-        <div style={{ 
-          background: 'rgba(255,255,255,0.02)', 
-          border: '1px solid var(--border)', 
-          borderRadius: 10, 
-          padding: '10px 20px', 
-          marginBottom: 15,
-          display: 'flex',
-          gap: 20,
-          fontSize: 13,
-          fontFamily: 'monospace',
-          color: 'var(--muted)',
-          flexWrap: 'wrap'
-        }}>
-          <span>Symbol: <strong style={{ color: '#fff' }}>{selected}</strong></span>
-          <span>Open: <strong style={{ color: 'var(--text)' }}>₹{hoveredCandle.open.toFixed(2)}</strong></span>
-          <span>High: <strong style={{ color: 'var(--green)' }}>₹{hoveredCandle.high.toFixed(2)}</strong></span>
-          <span>Low: <strong style={{ color: 'var(--red)' }}>₹{hoveredCandle.low.toFixed(2)}</strong></span>
-          <span>Close: <strong style={{ color: hoveredCandle.close >= hoveredCandle.open ? 'var(--green)' : 'var(--red)' }}>₹{hoveredCandle.close.toFixed(2)}</strong></span>
-          <span>Vol: <strong style={{ color: 'var(--text)' }}>{hoveredCandle.volume.toLocaleString()}</strong></span>
-          {hoveredCandle.sma20 && <span>SMA20: <strong style={{ color: '#60a5fa' }}>₹{hoveredCandle.sma20.toFixed(2)}</strong></span>}
-          {hoveredCandle.ema50 && <span>EMA50: <strong style={{ color: '#a78bfa' }}>₹{hoveredCandle.ema50.toFixed(2)}</strong></span>}
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, minHeight: '75vh' }}>
+        {/* LEFT: Watchlist Panel */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Watchlist Tabs */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {lists.map(l => (
+              <div key={l.id} style={{ position: 'relative' }}>
+                {renamingId === l.id ? (
+                  <input
+                    value={renameVal}
+                    onChange={e => setRenameVal(e.target.value)}
+                    onBlur={() => {
+                      if (renameVal) watchlistStore.renameList(l.id, renameVal);
+                      setRenamingId(null);
+                      refresh();
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (renameVal) watchlistStore.renameList(l.id, renameVal);
+                        setRenamingId(null);
+                        refresh();
+                      }
+                    }}
+                    autoFocus
+                    style={{ width: 100, padding: '4px 8px', fontSize: 12, borderRadius: 6 }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setActiveListId(l.id); watchlistStore.setActive(l.id); }}
+                    onDoubleClick={() => { setRenamingId(l.id); setRenameVal(l.name); }}
+                    className={activeListId === l.id ? '' : 'secondary'}
+                    style={{ padding: '5px 12px', fontSize: 12, borderRadius: 8 }}
+                  >
+                    {l.name}
+                  </button>
+                )}
+              </div>
+            ))}
+            <button onClick={handleCreateList} className="secondary" style={{ padding: '5px 10px', fontSize: 18, lineHeight: 1, borderRadius: 8 }}>+</button>
+          </div>
+
+          {/* Action Bar */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={handleExport} className="secondary" style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}>⬇ Export</button>
+            <button onClick={handleImport} className="secondary" style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}>⬆ Import</button>
+            {lists.length > 1 && <button onClick={() => handleDeleteList(activeListId)} className="secondary" style={{ fontSize: 11, padding: '5px 10px', color: '#f87171' }}>🗑</button>}
+          </div>
+
+          {/* Search Bar */}
+          <div ref={searchRef} style={{ position: 'relative' }}>
+            <input
+              value={searchQ}
+              onChange={e => { setSearchQ(e.target.value); setShowSearch(true); }}
+              onFocus={() => setShowSearch(true)}
+              placeholder="🔍  Search by name or symbol..."
+              style={{ width: '100%', padding: '10px 14px', fontSize: 13 }}
+            />
+            {showSearch && searchResults.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '110%', left: 0, right: 0,
+                background: '#111827', border: '1px solid rgba(99,102,241,0.3)',
+                borderRadius: 10, zIndex: 100, overflow: 'hidden',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              }}>
+                {searchResults.map(r => (
+                  <div
+                    key={r.symbol}
+                    onClick={() => handleAddStock(r.symbol, r.exchange)}
+                    style={{
+                      padding: '10px 14px', cursor: 'pointer', display: 'flex',
+                      justifyContent: 'space-between', alignItems: 'center',
+                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{r.symbol}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.name}</div>
+                    </div>
+                    <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4 }}>
+                      {r.exchange} +
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Column Headers */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '28px 1fr 90px 80px 70px 80px 80px 50px',
+            gap: 8, padding: '4px 14px', fontSize: 10, color: 'var(--muted)', fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: 0.5,
+          }}>
+            <span />
+            <span>Symbol</span>
+            <span style={{ textAlign: 'right' }}>LTP</span>
+            <span style={{ textAlign: 'right' }}>Chg%</span>
+            <span style={{ textAlign: 'right' }}>Chg₹</span>
+            <span style={{ textAlign: 'right' }}>Volume</span>
+            <span>H/L</span>
+            <span />
+          </div>
+
+          {/* Stock Rows */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', maxHeight: '60vh' }}>
+            {stocks.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 30, fontSize: 13 }}>
+                Search and add stocks to your watchlist
+              </div>
+            ) : stocks.map(stock => (
+              <StockRow
+                key={stock.symbol}
+                stock={stock}
+                quote={quotes[stock.symbol] || getMockQuote(stock.symbol)}
+                isSelected={selectedSymbol === stock.symbol}
+                onSelect={() => setSelectedSymbol(stock.symbol)}
+                onRemove={() => handleRemove(stock.symbol)}
+                onPin={() => handlePin(stock.symbol)}
+              />
+            ))}
+          </div>
         </div>
-      )}
 
-      {/* Chart Card */}
-      <div className="card" style={{ height: 460, padding: '24px 20px 10px 10px' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={candles}
-            onMouseMove={(state: any) => {
-              if (state && state.activePayload && state.activePayload.length > 0) {
-                setHoveredCandle(state.activePayload[0].payload);
-              }
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-            
-            <XAxis 
-              dataKey="timestamp" 
-              tickFormatter={v => new Date(v as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              stroke="#6b7280"
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-            />
-            
-            {/* Price axis */}
-            <YAxis 
-              yAxisId="price"
-              domain={['auto', 'auto']} 
-              stroke="#6b7280"
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              orientation="right"
-              tickFormatter={v => `₹${Number(v).toFixed(0)}`}
-            />
-
-            {/* Volume axis */}
-            <YAxis 
-              yAxisId="volume"
-              domain={[0, (data: any) => {
-                if (!data || !Array.isArray(data) || data.length === 0) return 100000;
-                const vols = data.map((c: any) => c.volume || 0);
-                return Math.max(...vols) * 4;
-              }]} 
-              stroke="transparent"
-              tickLine={false}
-              axisLine={false}
-            />
-
-            <Tooltip
-              content={<div style={{ display: 'none' }} />} // Handled by info bar overhead
-            />
-
-            {/* Volume Bars */}
-            <Bar 
-              yAxisId="volume"
-              dataKey="volume" 
-              fill="rgba(99, 102, 241, 0.08)"
-              radius={[4, 4, 0, 0]}
-            />
-
-            {/* Candlesticks - custom shape using d3 scale directly */}
-            <Bar
-              yAxisId="price"
-              dataKey="close"
-              shape={<CandlestickShape />}
-            />
-
-            {/* Overlay indicators */}
-            <Line 
-              yAxisId="price"
-              type="monotone" 
-              dataKey="sma20" 
-              stroke="#60a5fa" 
-              dot={false} 
-              strokeWidth={1.5}
-              connectNulls
-            />
-            <Line 
-              yAxisId="price"
-              type="monotone" 
-              dataKey="ema50" 
-              stroke="#a78bfa" 
-              dot={false} 
-              strokeWidth={1.5}
-              connectNulls
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div style={{ display: 'flex', gap: 15, marginTop: 10, paddingLeft: 5 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
-          <span style={{ display: 'inline-block', width: 12, height: 3, background: '#60a5fa' }} />
-          SMA20
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
-          <span style={{ display: 'inline-block', width: 12, height: 3, background: '#a78bfa' }} />
-          EMA50
+        {/* RIGHT: Chart Panel */}
+        <div>
+          <TradingChart symbol={selectedSymbol} />
         </div>
       </div>
     </div>
