@@ -29,6 +29,11 @@ export interface SignalEvent {
   readonly regime?:             string;        // MarketRegimeLabel
   readonly regime_confidence?:  number;        // 0-100
 
+  // Position Sizing & Risk Context
+  readonly recommended_qty?:    number;        // Risk & Volatility sized quantity
+  readonly risk_amount?:        number;        // Rupee risk at stop loss
+  readonly kelly_fraction?:     number;        // Quarter-Kelly fraction
+
   readonly emitted_at:  Date;
   readonly bar_ts:      Date;          // candle bucket timestamp
 }

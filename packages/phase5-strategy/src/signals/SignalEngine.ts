@@ -1,11 +1,18 @@
 import { IndicatorPipeline, IndicatorSnapshot } from '../indicators/IndicatorPipeline';
 import { SignalEvent, SignalDirection, SignalStrength } from './SignalEvent';
 import { RegimeEngine, RegimeClassification } from './RegimeEngine';
+import { PositionSizer } from './PositionSizer';
 
 export class SignalEngine {
   private readonly pipelines = new Map<string, IndicatorPipeline>();
   private readonly prevRsi = new Map<string, number>();
   private readonly regimeEngine = new RegimeEngine();
+  private readonly positionSizer = new PositionSizer();
+  private portfolioEquity: number = 1000000; // Default ₹1,000,000 for sizing
+
+  setPortfolioEquity(equity: number): void {
+    this.portfolioEquity = Math.max(0, equity);
+  }
 
   /**
    * Processes a bar event. If a signal is generated, returns it. Otherwise returns null.
@@ -121,6 +128,14 @@ export class SignalEngine {
     const stop_loss = direction === 'LONG' ? close - stopDistance : close + stopDistance;
     const take_profit = direction === 'LONG' ? close + targetDistance : close - targetDistance;
 
+    // Calculate dynamic position size
+    const sizingResult = this.positionSizer.calculate({
+      portfolioEquity: this.portfolioEquity,
+      entryPrice: close,
+      stopLossPrice: stop_loss,
+      atr14: snap.atr14,
+    });
+
     const generatedSignal: SignalEvent = {
       signal_id: `sig-${Math.random().toString(36).substring(2, 11)}`,
       symbol,
@@ -138,6 +153,9 @@ export class SignalEngine {
       ema50: snap.ema50,
       regime: regime.label,
       regime_confidence: regime.confidence,
+      recommended_qty: sizingResult.recommendedQty,
+      risk_amount: sizingResult.riskAmount,
+      kelly_fraction: sizingResult.kellyFraction,
       emitted_at: new Date(),
       bar_ts: barTs
     };
