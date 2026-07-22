@@ -23,6 +23,7 @@ import { getCachedHoldings, getJwtToken } from './brokerSession';
 import { pushNotification } from './notificationService';
 import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/SignalEngine';
 import { TradeJournalService } from './tradeJournalService';
+import { executeSignal, onTradeExit } from './orderExecutionService';
 import axios from 'axios';
 
 // Singleton instance variables
@@ -73,21 +74,24 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
   const openTrades = TradeJournalService.getJournal(100, 'OPEN');
   for (const trade of openTrades) {
     if (trade.symbol !== symbol) continue;
-
     if (trade.direction === 'LONG') {
       if (price >= trade.take_profit) {
-        TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
+        const closed = TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'TP');
         console.log(`[LiveMarket] 🎯 Take Profit Hit for ${symbol}: Closed at ₹${trade.take_profit}`);
       } else if (price <= trade.stop_loss) {
-        TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
+        const closed = TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'SL');
         console.log(`[LiveMarket] 🛑 Stop Loss Hit for ${symbol}: Closed at ₹${trade.stop_loss}`);
       }
     } else if (trade.direction === 'SHORT') {
       if (price <= trade.take_profit) {
-        TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
+        const closed = TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'TP');
         console.log(`[LiveMarket] 🎯 Take Profit Hit for ${symbol}: Closed at ₹${trade.take_profit}`);
       } else if (price >= trade.stop_loss) {
-        TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
+        const closed = TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'SL');
         console.log(`[LiveMarket] 🛑 Stop Loss Hit for ${symbol}: Closed at ₹${trade.stop_loss}`);
       }
     }
@@ -131,17 +135,8 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
         liveSignalsHistory.push(signal);
         if (liveSignalsHistory.length > 100) liveSignalsHistory.shift();
 
-        // Automatically log trade entry in TradeJournal
-        TradeJournalService.recordEntry({
-          symbol: signal.symbol,
-          direction: signal.direction,
-          entry_price: signal.entry_price,
-          quantity: signal.recommended_qty || 10,
-          stop_loss: signal.stop_loss,
-          take_profit: signal.take_profit,
-          regime: signal.regime,
-          regime_confidence: signal.regime_confidence,
-        });
+        // Automatically execute trade via Order Execution Service (Risk Guardian + Vault)
+        executeSignal(signal).catch(err => console.error('[LiveMarket] Order execution error:', err));
 
         // Dispatch to SSE clients
         sseClients.forEach(res => {

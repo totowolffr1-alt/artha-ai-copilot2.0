@@ -50,16 +50,16 @@ export function startScheduler() {
   });
   jobs.push({ name: 'Market Close Alert', schedule: '0 10 * * 1-5', task: marketClose });
 
-  const eodSummary = cron.schedule('5 10 * * 1-5', () => {
-    console.log('[schedulerService] Running EOD P&L Summary');
-    pushNotification({
-      component: 'schedulerService',
-      severity: 'INFO',
-      title: 'EOD Summary',
-      message: '📋 End of Day — Your portfolio P&L summary is ready. Check Performance Analytics.'
-    });
+  const eodSummary = cron.schedule('15 10 * * 1-5', async () => {
+    console.log('[schedulerService] Dispatching Daily P&L Briefing');
+    try {
+      const { dispatchDailyReport } = await import('./dailyReportService');
+      await dispatchDailyReport();
+    } catch (err: any) {
+      console.error('[schedulerService] Daily report dispatch failed:', err?.message);
+    }
   });
-  jobs.push({ name: 'EOD P&L Summary', schedule: '5 10 * * 1-5', task: eodSummary });
+  jobs.push({ name: 'EOD P&L Summary & Report', schedule: '15 10 * * 1-5', task: eodSummary });
 
   const fiiDii = cron.schedule('0 13 * * 1-5', async () => {
     console.log('[schedulerService] Running FII/DII Data Fetch');

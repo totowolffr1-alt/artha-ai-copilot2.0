@@ -17,6 +17,8 @@ import { watchlistRouter } from './routes/watchlist.routes';
 import { getJwtToken } from './services/brokerSession';
 import { systemRouter } from './routes/system.routes';
 import { journalRouter } from './routes/journal.routes';
+import { vaultRouter } from './routes/vault.routes';
+import { ordersRouter } from './routes/orders.routes';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
@@ -42,6 +44,8 @@ async function main() {
   app.use('/api/watchlist', watchlistRouter);
   app.use('/api/system',    systemRouter);
   app.use('/api/journal',   journalRouter);
+  app.use('/api/vault',     vaultRouter);
+  app.use('/api/orders',    ordersRouter);
 
   app.get('/api/health', (_req, res) => {
     res.json({
