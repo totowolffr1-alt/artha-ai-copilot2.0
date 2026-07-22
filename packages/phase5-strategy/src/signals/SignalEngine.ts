@@ -1,9 +1,11 @@
 import { IndicatorPipeline, IndicatorSnapshot } from '../indicators/IndicatorPipeline';
 import { SignalEvent, SignalDirection, SignalStrength } from './SignalEvent';
+import { RegimeEngine, RegimeClassification } from './RegimeEngine';
 
 export class SignalEngine {
   private readonly pipelines = new Map<string, IndicatorPipeline>();
   private readonly prevRsi = new Map<string, number>();
+  private readonly regimeEngine = new RegimeEngine();
 
   /**
    * Processes a bar event. If a signal is generated, returns it. Otherwise returns null.
@@ -24,8 +26,11 @@ export class SignalEngine {
     const pipeline = this.pipelines.get(symbol)!;
     const snap = pipeline.feed(open, high, low, close, volume);
 
-    // Make sure indicators have warmed up (e.g., ema50 must not be NaN)
-    if (isNaN(snap.ema50) || isNaN(snap.rsi14) || isNaN(snap.macd.histogram) || isNaN(snap.atr14)) {
+    // Evaluate current market regime
+    const regime = this.regimeEngine.classify(snap, close);
+
+    // Suppress signals during indicator/regime warmup
+    if (regime.label === 'WARMUP') {
       this.prevRsi.set(symbol, snap.rsi14);
       return null;
     }
@@ -34,43 +39,81 @@ export class SignalEngine {
     this.prevRsi.set(symbol, snap.rsi14);
 
     let direction: SignalDirection | null = null;
-    let confidence = 0;
+    let confidence = regime.confidence;
     let strength: SignalStrength = 'WEAK';
 
-    // BUY Signal logic: RSI crossing up out of oversold (< 35) + MACD hist positive + price above EMA20
-    if (!isNaN(prevRsiVal) && prevRsiVal < 35 && snap.rsi14 >= 35) {
-      if (snap.macd.histogram > 0 && close > snap.ema20) {
+    const rsiCrossedUp = !isNaN(prevRsiVal) && prevRsiVal < 35 && snap.rsi14 >= 35;
+    const rsiCrossedDown = !isNaN(prevRsiVal) && prevRsiVal > 65 && snap.rsi14 <= 65;
+    const rsiRisingFromOversold = !isNaN(prevRsiVal) && prevRsiVal < 40 && snap.rsi14 >= prevRsiVal;
+    const rsiFallingFromOverbought = !isNaN(prevRsiVal) && prevRsiVal > 60 && snap.rsi14 <= prevRsiVal;
+    const rsiRisingInUptrend = !isNaN(prevRsiVal) && snap.rsi14 > prevRsiVal && snap.rsi14 < 88;
+    const rsiFallingInDowntrend = !isNaN(prevRsiVal) && snap.rsi14 < prevRsiVal && snap.rsi14 > 20;
+
+    // ─────────────────────────────────────────────────────────────
+    // REGIME-CONDITIONAL SIGNAL EVALUATION RULES
+    // ─────────────────────────────────────────────────────────────
+
+    if (regime.label === 'TRENDING_UP') {
+      // Long signals favoured in uptrend on dip recovery or momentum turn
+      if ((rsiCrossedUp || rsiRisingFromOversold || rsiRisingInUptrend) && snap.macd.histogram > 0) {
+        direction = 'LONG';
+        confidence = Math.min(100, confidence + 15);
+        strength = close > snap.ema50 ? 'STRONG' : 'MODERATE';
+      }
+    } else if (regime.label === 'TRENDING_DOWN') {
+      // Short signals favoured in downtrend on rally failure or momentum turn
+      if ((rsiCrossedDown || rsiFallingFromOverbought || rsiFallingInDowntrend) && snap.macd.histogram < 0) {
+        direction = 'SHORT';
+        confidence = Math.min(100, confidence + 15);
+        strength = close < snap.ema50 ? 'STRONG' : 'MODERATE';
+      }
+    } else if (regime.label === 'SIDEWAYS') {
+      // Mean-reversion signals in sideways range
+      if (rsiCrossedUp && snap.macd.histogram > -0.5) {
         direction = 'LONG';
         confidence = 70;
-        if (close > snap.ema50) {
-          confidence += 15;
-          strength = 'STRONG';
-        } else {
-          strength = 'MODERATE';
-        }
-      }
-    }
-
-    // SELL Signal logic: RSI crossing down out of overbought (> 65) + MACD hist negative + price below EMA20
-    if (!isNaN(prevRsiVal) && prevRsiVal > 65 && snap.rsi14 <= 65) {
-      if (snap.macd.histogram < 0 && close < snap.ema20) {
+        strength = 'MODERATE';
+      } else if (rsiCrossedDown && snap.macd.histogram < 0.5) {
         direction = 'SHORT';
         confidence = 70;
-        if (close < snap.ema50) {
-          confidence += 15;
-          strength = 'STRONG';
-        } else {
-          strength = 'MODERATE';
-        }
+        strength = 'MODERATE';
+      }
+    } else if (regime.label === 'HIGH_VOLATILITY') {
+      // Conservative entries only on explicit RSI breakout or strong momentum turn
+      if ((rsiCrossedUp || rsiRisingInUptrend) && snap.macd.histogram > 0 && close > snap.ema20) {
+        direction = 'LONG';
+        confidence = 60;
+        strength = 'WEAK';
+      } else if ((rsiCrossedDown || rsiFallingInDowntrend) && snap.macd.histogram < 0 && close < snap.ema20) {
+        direction = 'SHORT';
+        confidence = 60;
+        strength = 'WEAK';
+      }
+    } else if (regime.label === 'LOW_VOLATILITY') {
+      // Pre-breakout setup: long if EMA20 > EMA50, short if EMA20 < EMA50
+      if (rsiCrossedUp && snap.ema20 >= snap.ema50) {
+        direction = 'LONG';
+        confidence = 75;
+        strength = 'STRONG';
+      } else if (rsiCrossedDown && snap.ema20 < snap.ema50) {
+        direction = 'SHORT';
+        confidence = 75;
+        strength = 'STRONG';
       }
     }
 
     if (!direction) return null;
 
-    // Determine multipliers dynamically based on active trading mode
+    // Dynamic SL/TP ATR multipliers based on regime & mode
     const mode = process.env.TRADING_MODE || 'INTRADAY';
-    const stopMultiplier = mode === 'SWING' ? 3.5 : 2.0;
-    const targetMultiplier = mode === 'SWING' ? 5.0 : 3.0;
+    let stopMultiplier = mode === 'SWING' ? 3.5 : 2.0;
+    let targetMultiplier = mode === 'SWING' ? 5.0 : 3.0;
+
+    // Expand stops in HIGH_VOLATILITY to prevent whipsaw losses
+    if (regime.label === 'HIGH_VOLATILITY') {
+      stopMultiplier *= 1.4;
+      targetMultiplier *= 1.4;
+    }
 
     const stopDistance = snap.atr14 * stopMultiplier;
     const targetDistance = snap.atr14 * targetMultiplier;
@@ -93,6 +136,8 @@ export class SignalEngine {
       atr: snap.atr14,
       ema20: snap.ema20,
       ema50: snap.ema50,
+      regime: regime.label,
+      regime_confidence: regime.confidence,
       emitted_at: new Date(),
       bar_ts: barTs
     };
@@ -105,3 +150,4 @@ export class SignalEngine {
     this.prevRsi.delete(symbol);
   }
 }
+

@@ -21,33 +21,56 @@ describe('SignalEngine & IndicatorPipeline', () => {
     }
   });
 
-  test('generates LONG signal when RSI crosses up 35 + MACD hist is positive', () => {
+  test('suppresses counter-trend LONG signals in TRENDING_DOWN regime', () => {
     // Warmup: Feed 50 bars at base price 100
     for (let i = 1; i <= 50; i++) {
       engine.processBar('TCS', 100, 102, 98, 100, 1000);
     }
 
-    // Now pull the price down to oversell the RSI (e.g. drop from 100 to 50)
-    for (let i = 1; i <= 10; i++) {
-      engine.processBar('TCS', 50, 52, 48, 50, 1000);
+    // Pull price down aggressively to enter TRENDING_DOWN regime
+    for (let i = 1; i <= 20; i++) {
+      engine.processBar('TCS', 100 - i * 2, 102 - i * 2, 98 - i * 2, 100 - i * 2, 1000);
     }
 
-    // Now push price up slowly to trigger a cross-up of RSI 35 and positive MACD hist
-    // Let's verify that eventually a LONG signal is triggered
-    let signalFound = false;
-    for (let price = 52; price <= 80; price += 2) {
-      const sig = engine.processBar('TCS', price, price + 2, price - 2, price, 1000);
-      if (sig && sig.direction === 'LONG') {
-        signalFound = true;
-        expect(sig.symbol).toBe('TCS');
-        expect(sig.rsi).toBeGreaterThanOrEqual(35);
-        expect(sig.macd_hist).toBeGreaterThan(0);
-        expect(sig.stop_loss).toBeLessThan(sig.entry_price);
-        expect(sig.take_profit).toBeGreaterThan(sig.entry_price);
+    // Try small bounce (counter-trend LONG)
+    const sig = engine.processBar('TCS', 61, 63, 59, 62, 1000);
+    // Counter-trend LONG signal should be suppressed in strong TRENDING_DOWN regime
+    expect(sig).toBeNull();
+  });
+
+  test('generates LONG signal in TRENDING_UP regime when RSI turns up with positive MACD', () => {
+    // Warmup & Establish TRENDING_UP regime with moderate price growth
+    let price = 100;
+    for (let i = 1; i <= 50; i++) {
+      engine.processBar('TCS', 100, 101, 99, 100, 1000);
+    }
+    for (let i = 1; i <= 25; i++) {
+      price += 0.4;
+      engine.processBar('TCS', price - 0.2, price + 0.3, price - 0.3, price, 1000);
+    }
+
+    // Dip slightly
+    for (let i = 1; i <= 3; i++) {
+      price -= 0.6;
+      engine.processBar('TCS', price + 0.2, price + 0.2, price - 0.4, price, 1000);
+    }
+
+    // Resume trend up and verify LONG signal is generated
+    let sig: any = null;
+    for (let step = 1; step <= 5; step++) {
+      price += 0.8;
+      const res = engine.processBar('TCS', price - 0.2, price + 0.5, price - 0.2, price, 1000);
+      if (res && res.direction === 'LONG') {
+        sig = res;
         break;
       }
     }
-    expect(signalFound).toBe(true);
+
+    expect(sig).not.toBeNull();
+    expect(sig?.direction).toBe('LONG');
+    expect(sig?.regime).toBe('TRENDING_UP');
+    expect(sig?.stop_loss).toBeLessThan(sig!.entry_price);
+    expect(sig?.take_profit).toBeGreaterThan(sig!.entry_price);
   });
 });
 

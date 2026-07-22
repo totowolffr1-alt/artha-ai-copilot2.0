@@ -25,6 +25,10 @@ export interface SignalEvent {
   readonly ema20:       number;
   readonly ema50:       number;
 
+  // Market Regime Context
+  readonly regime?:             string;        // MarketRegimeLabel
+  readonly regime_confidence?:  number;        // 0-100
+
   readonly emitted_at:  Date;
   readonly bar_ts:      Date;          // candle bucket timestamp
 }
