@@ -12,4 +12,6 @@ export * from './signals/PositionSizer';
 export * from './signals/SmallCapSignalFilter';
 export * from './signals/TransactionCostModel';
 export * from './signals/MarketSessionGuard';
+export * from './journal/PerformanceAnalytics';
+export * from './journal/TradeJournalEngine';
 

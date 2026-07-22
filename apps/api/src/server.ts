@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: require('path').resolve(__dirname, '../../../.env') });
+
 import { SimpleEventBus } from '../../../packages/phase2-market-data/src/marketData/SimpleEventBus';
 import { MockMarketDataAdapter } from '../../../packages/phase2-market-data/src/marketData/adapters/mock/MockAdapter';
 import { marketRouter, attachMarketData } from './routes/market.routes';
@@ -8,6 +11,12 @@ import { portfolioRouter } from './routes/portfolio.routes';
 import { tradingRouter } from './routes/trading.routes';
 import { newsRouter } from './routes/news.routes';
 import { signalsRouter } from './routes/signals.routes';
+import { watchlistRouter } from './routes/watchlist.routes';
+
+// Shared broker session — single login for entire server lifecycle
+import { getJwtToken } from './services/brokerSession';
+import { systemRouter } from './routes/system.routes';
+import { journalRouter } from './routes/journal.routes';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
@@ -16,19 +25,23 @@ async function main() {
   app.use(cors());
   app.use(express.json());
 
-  // ─── Market data wiring (Phase 2 real code + Mock adapter for local dev) ──
+  // ─── Market data wiring (Phase 12 Real Price Feed / WebSocket) ─────────────
   const bus = new SimpleEventBus();
-  const adapter = new MockMarketDataAdapter(bus);
-  await adapter.connect();
-
+  const { initLiveMarketFeed } = await import('./services/liveMarketService');
+  const { signalEngine } = await import('./routes/signals.routes');
+  const adapter = await initLiveMarketFeed(bus, signalEngine);
   attachMarketData(bus, adapter);
 
-  app.use('/api/market', marketRouter);
-  app.use('/api/ai', aiRouter);
+  // ─── Routes ────────────────────────────────────────────────────────────────
+  app.use('/api/market',    marketRouter);
+  app.use('/api/ai',        aiRouter);
   app.use('/api/portfolio', portfolioRouter);
-  app.use('/api/trading', tradingRouter);
-  app.use('/api/news', newsRouter);
-  app.use('/api/signals', signalsRouter);
+  app.use('/api/trading',   tradingRouter);
+  app.use('/api/news',      newsRouter);
+  app.use('/api/signals',   signalsRouter);
+  app.use('/api/watchlist', watchlistRouter);
+  app.use('/api/system',    systemRouter);
+  app.use('/api/journal',   journalRouter);
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -40,8 +53,33 @@ async function main() {
   });
 
   app.listen(PORT, () => {
-    console.log(`Artha API listening on http://localhost:${PORT}`);
-    console.log(`Market data adapter: ${adapter.name} (isLive=${adapter.isLive})`);
+    console.log(`\n🚀 Artha API listening on http://localhost:${PORT}`);
+    console.log(`📊 Market data: ${adapter.name} (isLive=${adapter.isLive})`);
+
+    // Warm up shared broker session once at startup (no duplicate TOTP race)
+    if (process.env.DEMO_MODE !== 'true') {
+      getJwtToken()
+        .then(token => {
+          if (token) {
+            console.log('✅ [BrokerSession] Angel One pre-authenticated at startup.');
+            // Trigger historical seed warmup in background
+            import('./services/liveMarketService').then(async m => {
+              const symbols = m.getActiveSymbols();
+              const { warmupSignalEngine } = await import('./services/historicalSeedService');
+              const { signalEngine } = await import('./routes/signals.routes');
+              await warmupSignalEngine(signalEngine, symbols);
+            }).catch(() => {});
+          } else {
+            console.warn('⚠️  [BrokerSession] Angel One login skipped or credentials missing.');
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Start Phase 11 monitoring (lazy import to avoid circular deps)
+    import('./services/healthMonitor').then(m => m.startMonitoring()).catch(() => {});
+    import('./services/schedulerService').then(m => m.startScheduler()).catch(() => {});
+    console.log('📡 System health monitor + scheduler started.');
   });
 }
 
