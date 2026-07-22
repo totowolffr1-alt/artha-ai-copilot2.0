@@ -21,8 +21,8 @@ import { MockMarketDataAdapter } from '../../../../packages/phase2-market-data/s
 import { getWatchlistSymbols } from '../routes/watchlist.routes';
 import { getCachedHoldings, getJwtToken } from './brokerSession';
 import { pushNotification } from './notificationService';
-import { updateLastTick } from './healthMonitor';
 import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/SignalEngine';
+import { TradeJournalService } from './tradeJournalService';
 import axios from 'axios';
 
 // Singleton instance variables
@@ -68,7 +68,30 @@ export function getActiveSymbols(): string[] {
 // ── Tick Processor ────────────────────────────────────────────────────────────
 export function handleIncomingTick(symbol: string, price: number, volume: number) {
   lastTickReceivedAt = Date.now();
-  updateLastTick(); // Keep health monitor green
+
+  // 1. Tick SL/TP monitor for active trades in TradeJournal
+  const openTrades = TradeJournalService.getJournal(100, 'OPEN');
+  for (const trade of openTrades) {
+    if (trade.symbol !== symbol) continue;
+
+    if (trade.direction === 'LONG') {
+      if (price >= trade.take_profit) {
+        TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
+        console.log(`[LiveMarket] 🎯 Take Profit Hit for ${symbol}: Closed at ₹${trade.take_profit}`);
+      } else if (price <= trade.stop_loss) {
+        TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
+        console.log(`[LiveMarket] 🛑 Stop Loss Hit for ${symbol}: Closed at ₹${trade.stop_loss}`);
+      }
+    } else if (trade.direction === 'SHORT') {
+      if (price <= trade.take_profit) {
+        TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
+        console.log(`[LiveMarket] 🎯 Take Profit Hit for ${symbol}: Closed at ₹${trade.take_profit}`);
+      } else if (price >= trade.stop_loss) {
+        TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
+        console.log(`[LiveMarket] 🛑 Stop Loss Hit for ${symbol}: Closed at ₹${trade.stop_loss}`);
+      }
+    }
+  }
 
   // Aggregate into OHLC bar
   if (!openTracker[symbol]) {
@@ -108,12 +131,24 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
         liveSignalsHistory.push(signal);
         if (liveSignalsHistory.length > 100) liveSignalsHistory.shift();
 
+        // Automatically log trade entry in TradeJournal
+        TradeJournalService.recordEntry({
+          symbol: signal.symbol,
+          direction: signal.direction,
+          entry_price: signal.entry_price,
+          quantity: signal.recommended_qty || 10,
+          stop_loss: signal.stop_loss,
+          take_profit: signal.take_profit,
+          regime: signal.regime,
+          regime_confidence: signal.regime_confidence,
+        });
+
         // Dispatch to SSE clients
         sseClients.forEach(res => {
           res.write(`data: ${JSON.stringify(signal)}\n\n`);
         });
 
-        console.log(`[LiveMarket] 🚀 Signal Generated: ${symbol} ${signal.direction} @ ₹${signal.entry_price}`);
+        console.log(`[LiveMarket] 🚀 Signal Generated & Journaled: ${symbol} ${signal.direction} @ ₹${signal.entry_price}`);
         pushNotification({
           component: 'signal_engine',
           severity: 'HIGH',

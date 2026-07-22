@@ -8,12 +8,14 @@
 
 import { Router, Request, Response } from 'express';
 import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/SignalEngine';
+import { StrategyRouter } from '../../../../packages/phase5-strategy/src/strategies/StrategyRouter';
 import { liveSignalsHistory, sseClients } from '../services/liveMarketService';
 
 export const signalsRouter = Router();
 
-// Instantiate and export SignalEngine so other services can access it
-export const signalEngine = new SignalEngine();
+// Instantiate and export SignalEngine & StrategyRouter for real-time routing
+export const signalEngine   = new SignalEngine();
+export const strategyRouter = new StrategyRouter();
 
 // SSE Stream Endpoint for real-time signals
 signalsRouter.get('/stream', (req: Request, res: Response) => {
