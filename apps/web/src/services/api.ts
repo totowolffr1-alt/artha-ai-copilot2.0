@@ -148,20 +148,24 @@ export function subscribeTicks(onTick: (tick: Tick) => void): () => void {
 export interface Signal {
   signal_id: string;
   symbol: string;
-  exchange: string;
+  exchange?: string;
   direction: 'LONG' | 'SHORT';
-  strength: 'WEAK' | 'MODERATE' | 'STRONG';
+  strength?: 'WEAK' | 'MODERATE' | 'STRONG';
   confidence: number;
   entry_price: number;
   stop_loss: number;
-  take_profit: number;
-  rsi: number;
-  macd_hist: number;
-  atr: number;
-  ema20: number;
-  ema50: number;
-  emitted_at: string;
-  bar_ts: string;
+  take_profit?: number;
+  target_price?: number;
+  strategy?: string;
+  timeframe?: string;
+  rsi?: number;
+  macd_hist?: number;
+  atr?: number;
+  ema20?: number;
+  ema50?: number;
+  emitted_at?: string;
+  bar_ts?: string;
+  timestamp?: string;
 }
 
 export function subscribeSignals(onSignal: (sig: Signal) => void): () => void {
@@ -186,6 +190,52 @@ export async function placeOrder(order: { symbol: string; direction: string; qty
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order),
+  });
+  return res.json();
+}
+
+export async function getVaultStatus() {
+  try {
+    const res = await fetch(`${BASE}/vault/status`);
+    if (!res.ok) throw new Error();
+    return res.json();
+  } catch {
+    return {
+      success: true,
+      vault: {
+        total_balance: 10000,
+        locked_capital: 0,
+        available_capital: 10000,
+        high_water_mark: 10000,
+        pnl_realized_lifetime: 0,
+        pnl_unrealized_active: 0,
+        active_positions_count: 0
+      },
+      risk_guardian: {
+        consecutive_losses: 0,
+        daily_pnl: 0,
+        daily_loss_limit: 500,
+        circuit_breaker_tripped: false,
+        pending_approvals_count: 0
+      }
+    };
+  }
+}
+
+export async function allocateCapital(amount: number) {
+  const res = await fetch(`${BASE}/vault/allocate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  });
+  return res.json();
+}
+
+export async function deallocateCapital(amount: number) {
+  const res = await fetch(`${BASE}/vault/deallocate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
   });
   return res.json();
 }

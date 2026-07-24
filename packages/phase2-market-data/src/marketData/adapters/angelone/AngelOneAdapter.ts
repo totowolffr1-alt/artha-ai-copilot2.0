@@ -98,7 +98,7 @@ export class AngelOneAdapter implements IMarketDataAdapter {
 
     // 1. Authenticate
     const loginResult = await this.session.login();
-    if (!loginResult.ok) return loginResult;
+    if (!loginResult.ok) return err((loginResult as any).error);
 
     const { feedToken } = loginResult.value;
 
@@ -192,7 +192,7 @@ export class AngelOneAdapter implements IMarketDataAdapter {
       data:    Array<[string, number, number, number, number, number]> | null;
     }>(CANDLE_PATH, body, jwt);
 
-    if (!result.ok) return result;
+    if (!result.ok) return err((result as any).error);
 
     const resp = result.value;
     if (!resp.status || !resp.data) {
@@ -257,7 +257,7 @@ export class AngelOneAdapter implements IMarketDataAdapter {
       }> | null;
     }>(SEARCH_PATH, { exchange: 'NSE', searchscrip: query }, jwt);
 
-    if (!result.ok) return result;
+    if (!result.ok) return err((result as any).error);
 
     const resp = result.value;
     if (!resp.status || !resp.data) {
@@ -305,6 +305,7 @@ export class AngelOneAdapter implements IMarketDataAdapter {
           'Authorization':  `Bearer ${this.session.jwtToken}`,
           'x-feed-token':   feedToken,
           'x-client-code':  this.extractClientCode(),
+          'x-api-key':      this.extractApiKey(),
         },
       } as unknown as string[]);   // Node.js WebSocket accepts options as second arg
 
@@ -335,8 +336,8 @@ export class AngelOneAdapter implements IMarketDataAdapter {
         this.handleMessage(event.data);
       };
 
-      ws.onerror = (event) => {
-        const msg = (event as ErrorEvent).message ?? 'WebSocket error';
+      ws.onerror = (event: any) => {
+        const msg = event?.message ?? 'WebSocket error';
         settle(err({
           type:    'NetworkError',
           message: `WebSocket error: ${msg}`,

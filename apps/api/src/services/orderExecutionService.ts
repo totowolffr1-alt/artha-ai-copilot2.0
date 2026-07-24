@@ -12,9 +12,9 @@
  *  → CapitalVault.releaseCapital(netPnL) → RiskGuardian.onPositionClosed()
  */
 
-import { capitalVault } from '@artha/phase5-strategy/src/vault/CapitalVault';
-import { RiskGuardian } from '@artha/phase5-strategy/src/vault/RiskGuardian';
-import { SignalEvent } from '@artha/phase5-strategy/src/signals/SignalEvent';
+import { capitalVault } from '../../../../packages/phase5-strategy/src/vault/CapitalVault';
+import { RiskGuardian } from '../../../../packages/phase5-strategy/src/vault/RiskGuardian';
+import { SignalEvent } from '../../../../packages/phase5-strategy/src/signals/SignalEvent';
 import { getApiHeaders, getSessionStatus } from './brokerSession';
 import { TradeJournalService } from './tradeJournalService';
 import { pushNotification } from './notificationService';
@@ -74,7 +74,7 @@ const SYMBOL_TOKENS: Record<string, string> = {
   ICICIBANK: '4963', WIPRO: '3787', SBIN: '3045', TATAMOTORS: '3432',
   BAJFINANCE: '317', CUPID: '13984', ZOMATO: '5097', KPITTECH: '6858',
   HAL: '2303', IRCTC: '8349', GOLDBEES: '1014438', NIFTYBEES: '1148',
-  SILVRBEES: '2845', PAYTM: '10604',
+  SILVRBEES: '2845', SILVERBEES: '2845', PAYTM: '10604',
 };
 
 function getToken(symbol: string): string {
@@ -99,7 +99,7 @@ async function placeAngelOrder(payload: AngelOrderPayload): Promise<OrderResult>
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.status && data.data?.orderid) {
       console.log(`[OrderExecution] ✅ LIVE ORDER placed — ${payload.transactiontype} ${payload.tradingsymbol} | OrderID: ${data.data.orderid}`);
       return { success: true, orderId: data.data.orderid, message: 'Order placed', isPaper: false };

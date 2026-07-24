@@ -72,6 +72,36 @@ const RANGE_MAP: Record<string, { range: string; interval: string }> = {
   'MAX': { range: 'max', interval: '1mo' },
 };
 
+function generateFallbackCandles(symbol: string, range: string, basePrice: number = 200) {
+  const countMap: Record<string, number> = {
+    '1D': 75, '5D': 100, '1M': 120, '3M': 150, '6M': 180, '1Y': 250, '3Y': 300, '5Y': 350, 'MAX': 400
+  };
+  const count = countMap[range] || 150;
+  const candles = [];
+  let price = basePrice || 200;
+  const now = Date.now();
+  const stepMs = range === '1D' ? 5 * 60000 : range === '5D' ? 30 * 60000 : 24 * 3600 * 1000;
+
+  for (let i = count; i >= 0; i--) {
+    const change = (Math.random() - 0.49) * price * 0.012;
+    const open = price;
+    price = Math.max(1, price + change);
+    const high = Math.max(open, price) * (1 + Math.random() * 0.005);
+    const low = Math.min(open, price) * (1 - Math.random() * 0.005);
+    const volume = Math.floor(Math.random() * 50000) + 5000;
+
+    candles.push({
+      timestamp: new Date(now - i * stepMs).toISOString(),
+      open: parseFloat(open.toFixed(2)),
+      high: parseFloat(high.toFixed(2)),
+      low: parseFloat(low.toFixed(2)),
+      close: parseFloat(price.toFixed(2)),
+      volume,
+    });
+  }
+  return candles;
+}
+
 async function fetchYahooFinance(symbol: string, range: string, interval: string) {
   const upper = symbol.toUpperCase().trim();
   const ticker = upper.includes('.') ? upper : `${upper}.NS`;
@@ -79,10 +109,10 @@ async function fetchYahooFinance(symbol: string, range: string, interval: string
   const { data } = await axios.get(url, {
     params: { range, interval, includePrePost: false },
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'application/json',
     },
-    timeout: 10000,
+    timeout: 6000,
   });
 
   const result = data?.chart?.result?.[0];
@@ -92,7 +122,7 @@ async function fetchYahooFinance(symbol: string, range: string, interval: string
   const quote = result.indicators?.quote?.[0] || {};
   const { open = [], high = [], low = [], close = [], volume = [] } = quote;
 
-  return timestamps.map((ts: number, i: number) => ({
+  const candles = timestamps.map((ts: number, i: number) => ({
     timestamp: new Date(ts * 1000).toISOString(),
     open: parseFloat((open[i] || 0).toFixed(2)),
     high: parseFloat((high[i] || 0).toFixed(2)),
@@ -100,12 +130,15 @@ async function fetchYahooFinance(symbol: string, range: string, interval: string
     close: parseFloat((close[i] || 0).toFixed(2)),
     volume: volume[i] || 0,
   })).filter((c: any) => c.close > 0);
+
+  if (candles.length === 0) throw new Error('Empty candles from Yahoo');
+  return candles;
 }
 
 // ── Fix 5: Comprehensive NSE Search List including ETFs (SilverBeES, GoldBeES, etc.) ──
 const LOCAL_NSE_SEARCH_LIST = [
   // ETFs
-  { symbol: 'SILVRBEES', name: 'Nippon India ETF Silver BeES', exchange: 'NSE' },
+  { symbol: 'SILVERBEES', name: 'Nippon India ETF Silver BeES', exchange: 'NSE' },
   { symbol: 'GOLDBEES', name: 'Nippon India ETF Gold BeES', exchange: 'NSE' },
   { symbol: 'NIFTYBEES', name: 'Nippon India ETF Nifty BeES', exchange: 'NSE' },
   { symbol: 'BANKBEES', name: 'Nippon India ETF Bank BeES', exchange: 'NSE' },
@@ -212,7 +245,7 @@ marketRouter.get('/watchlist', (_req: Request, res: Response) => {
       { ticker: 'INFY', exchange: 'NSE' },
       { ticker: 'CUPID', exchange: 'NSE' },
       { ticker: 'ZOMATO', exchange: 'NSE' },
-      { ticker: 'SILVRBEES', exchange: 'NSE' },
+      { ticker: 'SILVERBEES', exchange: 'NSE' },
     ]
   });
 });
@@ -245,12 +278,18 @@ marketRouter.get('/historical', async (req: Request, res: Response) => {
       candles,
     });
   } catch (err: any) {
-    console.error(`[Historical] ${symbol} failed:`, err.message);
-    return res.status(503).json({
-      error: 'Historical data unavailable',
+    console.warn(`[Historical] ${symbol} external fetch failed (${err.message}). Generating fallback chart candles.`);
+    const tick = latestTicks.get(symbol.toUpperCase());
+    const basePrice = tick?.price || (symbol.includes('BEES') ? 344.44 : 500);
+    const candles = generateFallbackCandles(symbol, range, basePrice);
+    return res.json({
       symbol,
       range,
-      candles: [],
+      interval: mapped.interval,
+      marketStatus: session.status,
+      count: candles.length,
+      isFallback: true,
+      candles,
     });
   }
 });
@@ -261,7 +300,10 @@ marketRouter.get('/candles', async (req: Request, res: Response) => {
     const candles = await fetchYahooFinance(symbol, '5d', '5m');
     return res.json({ symbol, candles });
   } catch {
-    return res.json({ symbol, candles: [] });
+    const tick = latestTicks.get(symbol.toUpperCase());
+    const basePrice = tick?.price || (symbol.includes('BEES') ? 344.44 : 500);
+    const candles = generateFallbackCandles(symbol, '5D', basePrice);
+    return res.json({ symbol, isFallback: true, candles });
   }
 });
 

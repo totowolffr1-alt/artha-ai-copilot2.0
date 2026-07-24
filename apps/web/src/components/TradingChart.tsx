@@ -115,18 +115,18 @@ export default function TradingChart({ symbol, onClose, fullscreen = false }: Pr
       if (raw.length === 0) throw new Error('No data');
 
       const candleData: CandlestickData<Time>[] = raw.map(c => ({
-        time: (new Date(c.timestamp).getTime() / 1000) as Time,
+        time: Math.floor(new Date(c.timestamp).getTime() / 1000) as Time,
         open: c.open, high: c.high, low: c.low, close: c.close,
       }));
 
       const volData = raw.map(c => ({
-        time: (new Date(c.timestamp).getTime() / 1000) as Time,
+        time: Math.floor(new Date(c.timestamp).getTime() / 1000) as Time,
         value: c.volume,
         color: c.close >= c.open ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
       }));
 
       const closes = raw.map(c => c.close);
-      const times = raw.map(c => (new Date(c.timestamp).getTime() / 1000) as Time);
+      const times = raw.map(c => Math.floor(new Date(c.timestamp).getTime() / 1000) as Time);
 
       // Period P&L calculation over loaded timeframe range
       const startPrice = raw[0].open || raw[0].close;

@@ -4,7 +4,7 @@
  * Daily 15:45 IST P&L Report Generator & Multi-Channel Dispatcher.
  */
 
-import { capitalVault } from '@artha/phase5-strategy/src/vault/CapitalVault';
+import { capitalVault } from '../../../../packages/phase5-strategy/src/vault/CapitalVault';
 import { riskGuardian } from './orderExecutionService';
 import { TradeJournalService } from './tradeJournalService';
 import { pushNotification } from './notificationService';
@@ -35,13 +35,15 @@ export interface DailyReport {
  */
 export async function generateDailyReport(): Promise<DailyReport> {
   const vaultStatus = capitalVault.getStatus();
-  const metrics = await TradeJournalService.getMetrics(30);
-  const tradesToday = await TradeJournalService.getTradesToday();
+  const metrics = TradeJournalService.getPerformanceMetrics();
+  const allTrades = TradeJournalService.getJournal(100);
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const tradesToday = allTrades.filter(t => t.entry_time.startsWith(todayDateStr));
 
-  const winningTrades = tradesToday.filter(t => t.pnl > 0).length;
-  const losingTrades = tradesToday.filter(t => t.pnl < 0).length;
-  const todayPnLPct = vaultStatus.allocatedCapital > 0
-    ? (vaultStatus.todayPnL / vaultStatus.allocatedCapital) * 100
+  const winningTrades = tradesToday.filter(t => (t.net_pnl || 0) > 0).length;
+  const losingTrades = tradesToday.filter(t => (t.net_pnl || 0) < 0).length;
+  const todayPnLPct = vaultStatus.total_balance > 0
+    ? (riskGuardian.getMetrics().daily_pnl / vaultStatus.total_balance) * 100
     : 0;
 
   const todayStr = new Date().toLocaleDateString('en-IN', {

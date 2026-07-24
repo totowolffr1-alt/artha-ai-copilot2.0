@@ -1,6 +1,195 @@
 {
   "notifications": [
     {
+      "id": 35,
+      "read": false,
+      "timestamp": "2026-07-24T19:34:10.911Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 34,
+      "read": false,
+      "timestamp": "2026-07-24T19:34:00.900Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 33,
+      "read": false,
+      "timestamp": "2026-07-24T19:32:25.012Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 32,
+      "read": false,
+      "timestamp": "2026-07-24T19:32:14.999Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 31,
+      "read": false,
+      "timestamp": "2026-07-24T19:29:51.712Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 30,
+      "read": false,
+      "timestamp": "2026-07-24T19:29:41.703Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 29,
+      "read": false,
+      "timestamp": "2026-07-24T19:21:59.089Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 28,
+      "read": false,
+      "timestamp": "2026-07-24T19:21:49.078Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 27,
+      "read": false,
+      "timestamp": "2026-07-24T19:16:42.487Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 26,
+      "read": false,
+      "timestamp": "2026-07-24T19:16:32.471Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 25,
+      "read": false,
+      "timestamp": "2026-07-24T19:09:28.056Z",
+      "component": "news_engine",
+      "severity": "WARNING",
+      "title": "Health Status Changed",
+      "message": "news_engine changed from HEALTHY to WARNING"
+    },
+    {
+      "id": 24,
+      "read": false,
+      "timestamp": "2026-07-24T18:59:37.908Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 23,
+      "read": false,
+      "timestamp": "2026-07-24T18:59:27.904Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 22,
+      "read": false,
+      "timestamp": "2026-07-22T16:44:44.014Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 21,
+      "read": false,
+      "timestamp": "2026-07-22T16:44:34.002Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 20,
+      "read": false,
+      "timestamp": "2026-07-22T16:41:25.847Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 19,
+      "read": false,
+      "timestamp": "2026-07-22T16:41:15.839Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
+      "id": 18,
+      "read": false,
+      "timestamp": "2026-07-22T16:29:41.607Z",
+      "component": "recoveryService",
+      "severity": "INFO",
+      "title": "System Recovery",
+      "message": "Auto-Recovery: price_cache — retry_price_cache completed"
+    },
+    {
+      "id": 17,
+      "read": false,
+      "timestamp": "2026-07-22T16:27:23.205Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 16,
+      "read": false,
+      "timestamp": "2026-07-22T16:27:13.199Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
       "id": 15,
       "read": false,
       "timestamp": "2026-07-21T19:39:38.318Z",
@@ -136,402 +325,342 @@
       "message": "broker_api changed from CRITICAL to HEALTHY"
     }
   ],
-  "price_alerts": [],
-  "health_history": [
+  "price_alerts": [
     {
       "id": 1,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:10:32.624Z"
-    },
+      "triggered": false,
+      "created_at": "2026-07-22T16:33:02.582Z",
+      "symbol": "CUPID",
+      "condition": "ABOVE",
+      "target_price": 209,
+      "active": true
+    }
+  ],
+  "health_history": [
     {
-      "id": 2,
-      "service": "overall",
-      "score": 87,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:11:02.631Z"
-    },
-    {
-      "id": 3,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:11:32.638Z"
-    },
-    {
-      "id": 4,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:12:02.651Z"
-    },
-    {
-      "id": 5,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:12:32.653Z"
-    },
-    {
-      "id": 6,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:13:02.655Z"
-    },
-    {
-      "id": 7,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:13:32.667Z"
-    },
-    {
-      "id": 8,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:14:02.678Z"
-    },
-    {
-      "id": 9,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:14:32.679Z"
-    },
-    {
-      "id": 10,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:15:02.685Z"
-    },
-    {
-      "id": 11,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:15:32.697Z"
-    },
-    {
-      "id": 12,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:16:02.706Z"
-    },
-    {
-      "id": 13,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:16:32.722Z"
-    },
-    {
-      "id": 14,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:17:02.727Z"
-    },
-    {
-      "id": 15,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:17:32.736Z"
-    },
-    {
-      "id": 16,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:18:02.743Z"
-    },
-    {
-      "id": 17,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:20:15.620Z"
-    },
-    {
-      "id": 18,
-      "service": "overall",
-      "score": 87,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:20:45.629Z"
-    },
-    {
-      "id": 19,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:21:15.634Z"
-    },
-    {
-      "id": 20,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:21:45.635Z"
-    },
-    {
-      "id": 21,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:22:15.636Z"
-    },
-    {
-      "id": 22,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:22:45.652Z"
-    },
-    {
-      "id": 23,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:23:15.656Z"
-    },
-    {
-      "id": 24,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:23:45.671Z"
-    },
-    {
-      "id": 25,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:24:15.675Z"
-    },
-    {
-      "id": 26,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:24:45.688Z"
-    },
-    {
-      "id": 27,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:25:12.907Z"
-    },
-    {
-      "id": 28,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:25:15.690Z"
-    },
-    {
-      "id": 29,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:25:45.698Z"
-    },
-    {
-      "id": 30,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:26:15.701Z"
-    },
-    {
-      "id": 31,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:26:45.705Z"
-    },
-    {
-      "id": 32,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:31:09.370Z"
-    },
-    {
-      "id": 33,
-      "service": "overall",
-      "score": 87,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:31:39.379Z"
-    },
-    {
-      "id": 34,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:32:09.386Z"
-    },
-    {
-      "id": 35,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:33:55.171Z"
-    },
-    {
-      "id": 36,
-      "service": "overall",
-      "score": 87,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:34:25.173Z"
-    },
-    {
-      "id": 37,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:34:55.187Z"
-    },
-    {
-      "id": 38,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:35:25.193Z"
-    },
-    {
-      "id": 39,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:35:55.204Z"
-    },
-    {
-      "id": 40,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:08.138Z"
-    },
-    {
-      "id": 41,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:13.208Z"
-    },
-    {
-      "id": 42,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:14.112Z"
-    },
-    {
-      "id": 43,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:14.632Z"
-    },
-    {
-      "id": 44,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:14.902Z"
-    },
-    {
-      "id": 45,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:15.125Z"
-    },
-    {
-      "id": 46,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:15.349Z"
-    },
-    {
-      "id": 47,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:15.574Z"
-    },
-    {
-      "id": 48,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:15.765Z"
-    },
-    {
-      "id": 49,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:15.957Z"
-    },
-    {
-      "id": 50,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:25.213Z"
-    },
-    {
-      "id": 51,
-      "service": "overall",
-      "score": 82,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:36:55.220Z"
-    },
-    {
-      "id": 52,
-      "service": "overall",
-      "score": 85,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:37:51.911Z"
-    },
-    {
-      "id": 53,
+      "id": 91,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:38:21.910Z"
+      "recorded_at": "2026-07-24T18:59:27.930Z"
     },
     {
-      "id": 54,
+      "id": 92,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:38:51.918Z"
+      "recorded_at": "2026-07-24T18:59:57.918Z"
     },
     {
-      "id": 55,
+      "id": 93,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:39:21.923Z"
+      "recorded_at": "2026-07-24T19:00:27.933Z"
     },
     {
-      "id": 56,
+      "id": 94,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-21T19:39:51.936Z"
+      "recorded_at": "2026-07-24T19:00:57.940Z"
+    },
+    {
+      "id": 95,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:01:27.947Z"
+    },
+    {
+      "id": 96,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:01:57.953Z"
+    },
+    {
+      "id": 97,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:02:27.955Z"
+    },
+    {
+      "id": 98,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:02:57.956Z"
+    },
+    {
+      "id": 99,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:03:27.960Z"
+    },
+    {
+      "id": 100,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:03:57.962Z"
+    },
+    {
+      "id": 101,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:04:27.975Z"
+    },
+    {
+      "id": 102,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:04:57.986Z"
+    },
+    {
+      "id": 103,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:05:27.995Z"
+    },
+    {
+      "id": 104,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:05:58.002Z"
+    },
+    {
+      "id": 105,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:06:28.010Z"
+    },
+    {
+      "id": 106,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:06:58.016Z"
+    },
+    {
+      "id": 107,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:07:28.022Z"
+    },
+    {
+      "id": 108,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:07:58.027Z"
+    },
+    {
+      "id": 109,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:08:28.038Z"
+    },
+    {
+      "id": 110,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:08:58.047Z"
+    },
+    {
+      "id": 111,
+      "service": "overall",
+      "score": 97,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:09:28.056Z"
+    },
+    {
+      "id": 112,
+      "service": "overall",
+      "score": 97,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:09:58.063Z"
+    },
+    {
+      "id": 113,
+      "service": "overall",
+      "score": 97,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:10:28.066Z"
+    },
+    {
+      "id": 114,
+      "service": "overall",
+      "score": 97,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:10:58.081Z"
+    },
+    {
+      "id": 115,
+      "service": "overall",
+      "score": 97,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:11:28.086Z"
+    },
+    {
+      "id": 116,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:16:32.510Z"
+    },
+    {
+      "id": 117,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:17:02.506Z"
+    },
+    {
+      "id": 118,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:17:32.520Z"
+    },
+    {
+      "id": 119,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:21:49.106Z"
+    },
+    {
+      "id": 120,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:22:19.099Z"
+    },
+    {
+      "id": 121,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:22:49.117Z"
+    },
+    {
+      "id": 122,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:23:19.125Z"
+    },
+    {
+      "id": 123,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:29:41.747Z"
+    },
+    {
+      "id": 124,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:30:11.728Z"
+    },
+    {
+      "id": 125,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:30:41.731Z"
+    },
+    {
+      "id": 126,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:31:11.741Z"
+    },
+    {
+      "id": 127,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:32:15.053Z"
+    },
+    {
+      "id": 128,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:32:45.027Z"
+    },
+    {
+      "id": 129,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:33:15.030Z"
+    },
+    {
+      "id": 130,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:34:00.951Z"
+    },
+    {
+      "id": 131,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:34:30.934Z"
+    },
+    {
+      "id": 132,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:35:00.934Z"
+    },
+    {
+      "id": 133,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:35:30.943Z"
+    },
+    {
+      "id": 134,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T19:36:00.956Z"
     }
   ],
   "system_timeline": [
+    {
+      "id": 24,
+      "component": "news_engine",
+      "event": "Status changed to WARNING",
+      "severity": "WARNING",
+      "recorded_at": "2026-07-24T19:09:28.056Z"
+    },
+    {
+      "id": 23,
+      "component": "recoveryService",
+      "event": "Recovered price_cache via retry_price_cache",
+      "severity": "INFO",
+      "recorded_at": "2026-07-22T16:29:41.607Z"
+    },
     {
       "id": 22,
       "component": "recoveryService",
@@ -689,6 +818,13 @@
   ],
   "recovery_events": [
     {
+      "id": 9,
+      "service": "price_cache",
+      "action": "retry_price_cache",
+      "result": "SUCCESS",
+      "recorded_at": "2026-07-22T16:29:41.607Z"
+    },
+    {
       "id": 8,
       "service": "price_cache",
       "action": "retry_price_cache",
@@ -754,11 +890,13 @@
       "created_at": "2026-07-21T19:25:39.259Z"
     }
   ],
+  "trade_journal": [],
   "_counters": {
-    "health_history": 56,
-    "notifications": 15,
-    "system_timeline": 22,
-    "recovery_events": 8,
-    "push_subscriptions": 1
+    "health_history": 134,
+    "notifications": 35,
+    "system_timeline": 24,
+    "recovery_events": 9,
+    "push_subscriptions": 1,
+    "price_alerts": 1
   }
 }

@@ -406,7 +406,7 @@ export default function SystemHealth() {
                 <div>
                   <div style={{ fontWeight:700, color:'#e2e8f0', fontSize:14 }}>{a.symbol} <span style={{ color:'#818cf8' }}>{a.condition}</span> ₹{a.target_price}</div>
                   <div style={{ fontSize:11, color:'#64748b', marginTop:3 }}>
-                    {a.triggered ? `✅ Triggered at ${a.triggered_at ? new Date(a.triggered_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}) : '—'}` : '⏳ Watching...'}
+                    {a.triggered ? `✅ Triggered at ${(a as any).triggered_at ? new Date((a as any).triggered_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}) : '—'}` : '⏳ Watching...'}
                   </div>
                 </div>
                 <button onClick={() => deleteAlert(a.id)} style={{ background:'rgba(239,68,68,0.15)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, padding:'6px 12px', color:'#ef4444', fontSize:12, cursor:'pointer' }}>

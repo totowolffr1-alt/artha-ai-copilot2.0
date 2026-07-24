@@ -33,14 +33,14 @@ ordersRouter.post('/approve', (req: Request, res: Response) => {
 
 // GET /api/orders/open — list all open trades in trade journal
 ordersRouter.get('/open', async (_req: Request, res: Response) => {
-  const openTrades = await TradeJournalService.getOpenTrades();
+  const openTrades = TradeJournalService.getJournal(100, 'OPEN');
   res.json({ openCount: openTrades.length, trades: openTrades });
 });
 
 // GET /api/orders/history — list recently closed trades
 ordersRouter.get('/history', async (req: Request, res: Response) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-  const history = await TradeJournalService.getTradeHistory(limit);
+  const history = TradeJournalService.getJournal(limit, 'CLOSED');
   res.json({ count: history.length, trades: history });
 });
 

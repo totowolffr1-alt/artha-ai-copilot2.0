@@ -77,21 +77,21 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
     if (trade.direction === 'LONG') {
       if (price >= trade.take_profit) {
         const closed = TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
-        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'TP');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.net_pnl, 'TP');
         console.log(`[LiveMarket] 🎯 Take Profit Hit for ${symbol}: Closed at ₹${trade.take_profit}`);
       } else if (price <= trade.stop_loss) {
         const closed = TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
-        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'SL');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.net_pnl, 'SL');
         console.log(`[LiveMarket] 🛑 Stop Loss Hit for ${symbol}: Closed at ₹${trade.stop_loss}`);
       }
     } else if (trade.direction === 'SHORT') {
       if (price <= trade.take_profit) {
         const closed = TradeJournalService.recordExit(trade.trade_id, trade.take_profit, 'TARGET_HIT');
-        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'TP');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.net_pnl, 'TP');
         console.log(`[LiveMarket] 🎯 Take Profit Hit for ${symbol}: Closed at ₹${trade.take_profit}`);
       } else if (price >= trade.stop_loss) {
         const closed = TradeJournalService.recordExit(trade.trade_id, trade.stop_loss, 'STOP_HIT');
-        if (closed) onTradeExit(trade.trade_id, symbol, closed.pnl_net, 'SL');
+        if (closed) onTradeExit(trade.trade_id, symbol, closed.net_pnl, 'SL');
         console.log(`[LiveMarket] 🛑 Stop Loss Hit for ${symbol}: Closed at ₹${trade.stop_loss}`);
       }
     }
@@ -157,7 +157,6 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
 
 // ── Yahoo Finance Fallback Polling ─────────────────────────────────────────────
 async function pollYahooFinancePrices() {
-  if (!isMarketOpen()) return;
 
   const symbols = getActiveSymbols();
   console.log(`[LiveMarket Fallback] Polling Yahoo Finance for ${symbols.length} symbols...`);
@@ -301,10 +300,10 @@ export async function initLiveMarketFeed(
 
     startWatchdog();
   } else {
-    console.error('[LiveMarket] ❌ Live adapter connection failed:', connectResult.error?.message);
-    console.log('[LiveMarket] Falling back to MOCK mode due to connection error.');
-    _adapter = new MockMarketDataAdapter(bus);
-    await _adapter.connect();
+    console.warn('[LiveMarket] ⚠️ Live WebSocket connection inactive (Off-market hours or stream offline):', connectResult.error?.message);
+    console.log('[LiveMarket] Maintaining LIVE Angel One Adapter for REST/orders & starting real price polling fallback.');
+    startFallbackPolling();
+    startWatchdog();
   }
 
   return _adapter;

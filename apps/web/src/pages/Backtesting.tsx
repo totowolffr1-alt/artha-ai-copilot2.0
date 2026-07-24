@@ -84,7 +84,7 @@ export default function Backtesting() {
             <input
               value={customSymbol}
               onChange={e => setCustomSymbol(e.target.value.toUpperCase())}
-              placeholder="e.g. CUPID, RELIANCE, SILVRBEES"
+              placeholder="e.g. CUPID, RELIANCE, SILVERBEES"
               style={{ width: 200, padding: '10px 14px', fontSize: 13 }}
             />
           </div>

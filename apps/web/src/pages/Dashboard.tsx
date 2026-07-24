@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder } from '../services/api';
 import { getMarketSession } from '../services/marketSession';
+import { CapitalVaultCard } from '../components/CapitalVaultCard';
 
 const INITIAL_SIGNALS: Signal[] = [
   {
@@ -59,15 +60,16 @@ export default function Dashboard() {
       .then(items => {
         if (items && items.length > 0) {
           const initialMap: Record<string, Tick> = {};
-          items.forEach(item => {
-            initialMap[item.symbol] = {
-              symbol: item.symbol,
-              price: item.price || item.last_price || 100,
-              change: item.change || 0,
-              change_pct: item.change_pct || 0,
-              volume: item.volume || 100000,
-              timestamp: new Date().toISOString(),
-            };
+          items.forEach((item: any) => {
+            const sym = item.symbol || item.ticker;
+            if (sym) {
+              initialMap[sym] = {
+                symbol: sym,
+                exchange: item.exchange || 'NSE',
+                price: item.price || item.last_price || 100,
+                timestamp: new Date().toISOString(),
+              };
+            }
           });
           setTicks(initialMap);
         }
@@ -169,6 +171,9 @@ export default function Dashboard() {
           IST {new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
         </span>
       </div>
+
+      {/* 🤖 Quant Employee — Capital Vault Allotment Widget */}
+      <CapitalVaultCard />
 
       {/* Overview Stats */}
       <div className="grid">

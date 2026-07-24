@@ -5,7 +5,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { capitalVault } from '@artha/phase5-strategy/src/vault/CapitalVault';
+import { capitalVault } from '../../../../packages/phase5-strategy/src/vault/CapitalVault';
 import { riskGuardian, emergencyKillSwitch, getPendingApprovals, resolveApproval } from '../services/orderExecutionService';
 
 export const vaultRouter = Router();
