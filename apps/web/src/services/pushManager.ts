@@ -3,7 +3,7 @@
  * Handles service worker registration, permission request, and subscription lifecycle.
  */
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 /** Register service worker and set up push notifications */
 export async function initPushNotifications(): Promise<boolean> {
