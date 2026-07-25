@@ -1,6 +1,25 @@
 {
   "notifications": [
     {
+      "id": 43,
+      "read": false,
+      "timestamp": "2026-07-25T18:07:36.607Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 42,
+      "read": false,
+      "timestamp": "2026-07-25T18:07:26.596Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
       "id": 41,
       "read": false,
       "timestamp": "2026-07-24T20:27:47.051Z",
@@ -848,6 +867,27 @@
       "score": 100,
       "status": "HEALTHY",
       "recorded_at": "2026-07-24T20:35:07.179Z"
+    },
+    {
+      "id": 156,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-25T18:07:26.634Z"
+    },
+    {
+      "id": 157,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-25T18:07:56.628Z"
+    },
+    {
+      "id": 158,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-25T18:08:26.638Z"
     }
   ],
   "system_timeline": [
@@ -1096,8 +1136,8 @@
   ],
   "trade_journal": [],
   "_counters": {
-    "health_history": 155,
-    "notifications": 41,
+    "health_history": 158,
+    "notifications": 43,
     "system_timeline": 24,
     "recovery_events": 9,
     "push_subscriptions": 1,
