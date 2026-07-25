@@ -1,6 +1,25 @@
 {
   "notifications": [
     {
+      "id": 41,
+      "read": false,
+      "timestamp": "2026-07-24T20:27:47.051Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 40,
+      "read": false,
+      "timestamp": "2026-07-24T20:27:37.044Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
       "id": 39,
       "read": false,
       "timestamp": "2026-07-24T20:17:40.044Z",
@@ -717,6 +736,118 @@
       "score": 100,
       "status": "HEALTHY",
       "recorded_at": "2026-07-24T20:18:00.050Z"
+    },
+    {
+      "id": 140,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:27:37.073Z"
+    },
+    {
+      "id": 141,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:28:07.070Z"
+    },
+    {
+      "id": 142,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:28:37.075Z"
+    },
+    {
+      "id": 143,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:29:07.086Z"
+    },
+    {
+      "id": 144,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:29:37.092Z"
+    },
+    {
+      "id": 145,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:30:07.099Z"
+    },
+    {
+      "id": 146,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:30:37.103Z"
+    },
+    {
+      "id": 147,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:31:07.106Z"
+    },
+    {
+      "id": 148,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:31:37.108Z"
+    },
+    {
+      "id": 149,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:32:07.117Z"
+    },
+    {
+      "id": 150,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:32:37.131Z"
+    },
+    {
+      "id": 151,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:33:07.142Z"
+    },
+    {
+      "id": 152,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:33:37.142Z"
+    },
+    {
+      "id": 153,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:34:07.156Z"
+    },
+    {
+      "id": 154,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:34:37.163Z"
+    },
+    {
+      "id": 155,
+      "service": "overall",
+      "score": 100,
+      "status": "HEALTHY",
+      "recorded_at": "2026-07-24T20:35:07.179Z"
     }
   ],
   "system_timeline": [
@@ -965,8 +1096,8 @@
   ],
   "trade_journal": [],
   "_counters": {
-    "health_history": 139,
-    "notifications": 39,
+    "health_history": 155,
+    "notifications": 41,
     "system_timeline": 24,
     "recovery_events": 9,
     "push_subscriptions": 1,

@@ -10,7 +10,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "dev:api": "npm run dev --prefix apps/api",
-    "dev:web": "npm run dev --prefix apps/web"
+    "dev:web": "npm run dev --prefix apps/web",
+    "start": "npm run start --prefix apps/api"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
