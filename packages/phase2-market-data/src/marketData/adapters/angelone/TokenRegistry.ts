@@ -23,9 +23,9 @@
  * For options/futures we accept partial match on symbol prefix.
  */
 
-import type { Result }    from '../../../utils/errors';
-import { ok, err }        from '../../../utils/errors';
-import type { TokenInfo } from '../IMarketDataAdapter';
+import type { Result, MarketDataError } from '../../../utils/errors';
+import { ok, err }                      from '../../../utils/errors';
+import type { TokenInfo }               from '../IMarketDataAdapter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ export class TokenRegistry {
 
     // Ensure master is loaded
     const loadResult = await this.ensureMasterLoaded();
-    if (!loadResult.ok) return err((loadResult as { ok: false; error: Error }).error);
+    if (!loadResult.ok) return err((loadResult as unknown as { ok: false; error: MarketDataError }).error);
 
     return this.findInMaster(ticker, exchange, cacheKey);
   }
@@ -93,7 +93,7 @@ export class TokenRegistry {
 
     const loadResult = await this.ensureMasterLoaded();
     if (!loadResult.ok) {
-      const loadError = (loadResult as { ok: false; error: Error }).error;
+      const loadError = (loadResult as unknown as { ok: false; error: MarketDataError }).error;
       for (const { ticker, exchange } of pairs) {
         results.set(`${exchange}|${ticker}`, err(loadError));
       }

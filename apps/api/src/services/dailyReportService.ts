@@ -5,7 +5,6 @@
  */
 
 import { capitalVault } from '../../../../packages/phase5-strategy/src/vault/CapitalVault';
-import { riskGuardian } from './orderExecutionService';
 import { TradeJournalService } from './tradeJournalService';
 import { pushNotification } from './notificationService';
 
@@ -42,8 +41,8 @@ export async function generateDailyReport(): Promise<DailyReport> {
 
   const winningTrades = tradesToday.filter(t => (t.net_pnl || 0) > 0).length;
   const losingTrades = tradesToday.filter(t => (t.net_pnl || 0) < 0).length;
-  const todayPnLPct = vaultStatus.total_balance > 0
-    ? (riskGuardian.getMetrics().daily_pnl / vaultStatus.total_balance) * 100
+  const todayPnLPct = vaultStatus.allocatedCapital > 0
+    ? (vaultStatus.todayPnL / vaultStatus.allocatedCapital) * 100
     : 0;
 
   const todayStr = new Date().toLocaleDateString('en-IN', {
@@ -59,9 +58,9 @@ export async function generateDailyReport(): Promise<DailyReport> {
 
   const tradeBreakdownLines = tradesToday.length > 0
     ? tradesToday.map(t => {
-        const icon = t.pnl >= 0 ? '✅' : '❌';
-        const pnlSign = t.pnl >= 0 ? '+' : '';
-        return `  ${icon} ${t.symbol} ${t.direction} ${pnlSign}₹${t.pnl.toFixed(2)} (${t.exit_reason || 'CLOSED'})`;
+        const icon = (t.net_pnl || 0) >= 0 ? '✅' : '❌';
+        const pnlSign = (t.net_pnl || 0) >= 0 ? '+' : '';
+        return `  ${icon} ${t.symbol} ${t.direction} ${pnlSign}₹${(t.net_pnl || 0).toFixed(2)} (${t.exit_reason || 'CLOSED'})`;
       }).join('\n')
     : '  • No trades executed today.';
 
@@ -78,7 +77,7 @@ export async function generateDailyReport(): Promise<DailyReport> {
     `Trades Today (${tradesToday.length}):`,
     tradeBreakdownLines,
     `──────────────────────────────────────────────`,
-    `30-Day Win Rate    : **${metrics.winRate.toFixed(1)}%**`,
+    `30-Day Win Rate    : **${metrics.winRatePct.toFixed(1)}%**`,
     `30-Day Sharpe Ratio: **${metrics.sharpeRatio.toFixed(2)}**`,
     `Max Drawdown       : **${metrics.maxDrawdownPct.toFixed(2)}%**`,
     `Drawdown from Peak : **${vaultStatus.drawdownFromPeak.toFixed(2)}%**`,
@@ -99,7 +98,7 @@ export async function generateDailyReport(): Promise<DailyReport> {
     tradesTodayCount: tradesToday.length,
     winningTradesCount: winningTrades,
     losingTradesCount: losingTrades,
-    winRate30d: metrics.winRate,
+    winRate30d: metrics.winRatePct,
     sharpeRatio30d: metrics.sharpeRatio,
     maxDrawdownPct: metrics.maxDrawdownPct,
     drawdownFromPeakPct: vaultStatus.drawdownFromPeak,
