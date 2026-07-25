@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "description": "Artha AI — Phase 8 (Learning Engine) implementation",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "tsc --noEmit false -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
