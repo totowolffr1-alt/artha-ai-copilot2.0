@@ -34,7 +34,7 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/api ./apps/api
 
 # Create directory for persistent SQLite data
-RUN mkdir -p /app/apps/api/data && chown -node:node /app/apps/api/data
+RUN mkdir -p /app/apps/api/data && chown node:node /app/apps/api/data
 
 EXPOSE 4000
 
