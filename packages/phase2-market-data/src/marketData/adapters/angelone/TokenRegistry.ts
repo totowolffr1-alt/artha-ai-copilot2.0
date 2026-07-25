@@ -77,7 +77,7 @@ export class TokenRegistry {
 
     // Ensure master is loaded
     const loadResult = await this.ensureMasterLoaded();
-    if (!loadResult.ok) return err((loadResult as { ok: false; error: Error }).error);
+    if (!loadResult.ok) return err(loadResult.error);
 
     return this.findInMaster(ticker, exchange, cacheKey);
   }
@@ -93,7 +93,7 @@ export class TokenRegistry {
 
     const loadResult = await this.ensureMasterLoaded();
     if (!loadResult.ok) {
-      const loadError = (loadResult as { ok: false; error: Error }).error;
+      const loadError = loadResult.error;
       for (const { ticker, exchange } of pairs) {
         results.set(`${exchange}|${ticker}`, err(loadError));
       }
