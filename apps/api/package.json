@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "build": "tsc -p tsconfig.json",
     "dev": "ts-node-dev --transpile-only --respawn src/server.ts",
-    "start": "ts-node --transpile-only src/server.ts"
+    "start": "node dist/apps/api/src/server.js"
   },
   "dependencies": {
     "@types/node-cron": "^3.0.11",
