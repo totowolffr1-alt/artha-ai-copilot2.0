@@ -79,10 +79,11 @@ async function searchStocks(q: string): Promise<Array<{ symbol: string; name: st
 }
 
 // ── Stock Row ─────────────────────────────────────────────────────────────────
-function StockRow({ stock, quote, isSelected, onSelect, onRemove, onPin }: {
+function StockRow({ stock, quote, isSelected, isMobile, onSelect, onRemove, onPin }: {
   stock: WatchlistStock;
   quote: Quote;
   isSelected: boolean;
+  isMobile: boolean;
   onSelect: () => void;
   onRemove: () => void;
   onPin: () => void;
@@ -93,7 +94,7 @@ function StockRow({ stock, quote, isSelected, onSelect, onRemove, onPin }: {
   return (
     <div onClick={onSelect} style={{
       display: 'grid',
-      gridTemplateColumns: '28px 1fr 90px 80px 70px 80px 80px 50px',
+      gridTemplateColumns: isMobile ? '24px 1fr 75px 70px 30px' : '28px 1fr 90px 80px 70px 80px 80px 50px',
       alignItems: 'center', gap: 8,
       padding: '10px 14px',
       borderRadius: 8,
@@ -130,20 +131,26 @@ function StockRow({ stock, quote, isSelected, onSelect, onRemove, onPin }: {
       </div>
 
       {/* Change ₹ */}
-      <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color }}>
-        {isUp ? '+' : ''}₹{quote.change.toFixed(2)}
-      </div>
+      {!isMobile && (
+        <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color }}>
+          {isUp ? '+' : ''}₹{quote.change.toFixed(2)}
+        </div>
+      )}
 
       {/* Volume */}
-      <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>
-        {quote.volume > 1e6 ? `${(quote.volume / 1e6).toFixed(1)}M` : `${(quote.volume / 1e3).toFixed(0)}K`}
-      </div>
+      {!isMobile && (
+        <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>
+          {quote.volume > 1e6 ? `${(quote.volume / 1e6).toFixed(1)}M` : `${(quote.volume / 1e3).toFixed(0)}K`}
+        </div>
+      )}
 
       {/* High / Low */}
-      <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace', lineHeight: 1.4 }}>
-        <div style={{ color: '#10b981' }}>H {quote.high.toFixed(0)}</div>
-        <div style={{ color: '#ef4444' }}>L {quote.low.toFixed(0)}</div>
-      </div>
+      {!isMobile && (
+        <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace', lineHeight: 1.4 }}>
+          <div style={{ color: '#10b981' }}>H {quote.high.toFixed(0)}</div>
+          <div style={{ color: '#ef4444' }}>L {quote.low.toFixed(0)}</div>
+        </div>
+      )}
 
       {/* Remove */}
       <button onClick={e => { e.stopPropagation(); onRemove(); }} className="secondary" style={{
@@ -170,6 +177,19 @@ export default function Watchlist() {
   const [renameVal, setRenameVal] = useState('');
   const [session] = useState(getMarketSession());
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Mobile layout state
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [mobileView, setMobileView] = useState<'list' | 'chart'>('list');
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mob = window.innerWidth <= 768;
+      setIsMobile(mob);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const activeList = lists.find(l => l.id === activeListId) || lists[0];
 
@@ -288,7 +308,7 @@ export default function Watchlist() {
         display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
         background: session.isOpen ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
         border: `1px solid ${session.isOpen ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-        borderRadius: 10, marginBottom: 20, fontSize: 13,
+        borderRadius: 10, marginBottom: 16, fontSize: 13,
       }}>
         <span style={{
           width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
@@ -298,142 +318,174 @@ export default function Watchlist() {
         }} />
         <strong style={{ color: session.isOpen ? '#34d399' : '#f87171' }}>{session.status}</strong>
         <span style={{ color: 'var(--muted)' }}>{session.message}</span>
-        {!session.isOpen && <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontFamily: 'monospace', fontSize: 12 }}>
+        {!session.isOpen && !isMobile && <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontFamily: 'monospace', fontSize: 12 }}>
           Prices frozen at close · Next open {new Date(session.nextOpen).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })} IST
         </span>}
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, minHeight: '75vh' }}>
-        {/* LEFT: Watchlist Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Watchlist Tabs */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            {lists.map(l => (
-              <div key={l.id} style={{ position: 'relative' }}>
-                {renamingId === l.id ? (
-                  <input
-                    value={renameVal}
-                    onChange={e => setRenameVal(e.target.value)}
-                    onBlur={() => {
-                      if (renameVal) watchlistStore.renameList(l.id, renameVal);
-                      setRenamingId(null);
-                      refresh();
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
+      {/* Mobile Segmented View Switcher (Only visible on mobile) */}
+      {isMobile && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button 
+            onClick={() => setMobileView('list')} 
+            className={mobileView === 'list' ? '' : 'secondary'} 
+            style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 8, height: 40 }}
+          >
+            📋 Watchlist Stock List
+          </button>
+          <button 
+            onClick={() => setMobileView('chart')} 
+            className={mobileView === 'chart' ? '' : 'secondary'} 
+            style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 8, height: 40 }}
+          >
+            📈 Chart: {selectedSymbol}
+          </button>
+        </div>
+      )}
+
+      {/* Main Layout Grid */}
+      <div className="watchlist-layout">
+        {/* Watchlist Panel (Left on Desktop, conditional on Mobile) */}
+        {(!isMobile || mobileView === 'list') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Watchlist Tabs */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {lists.map(l => (
+                <div key={l.id} style={{ position: 'relative' }}>
+                  {renamingId === l.id ? (
+                    <input
+                      value={renameVal}
+                      onChange={e => setRenameVal(e.target.value)}
+                      onBlur={() => {
                         if (renameVal) watchlistStore.renameList(l.id, renameVal);
                         setRenamingId(null);
                         refresh();
-                      }
-                    }}
-                    autoFocus
-                    style={{ width: 100, padding: '4px 8px', fontSize: 12, borderRadius: 6 }}
-                  />
-                ) : (
-                  <button
-                    onClick={() => { setActiveListId(l.id); watchlistStore.setActive(l.id); }}
-                    onDoubleClick={() => { setRenamingId(l.id); setRenameVal(l.name); }}
-                    className={activeListId === l.id ? '' : 'secondary'}
-                    style={{ padding: '5px 12px', fontSize: 12, borderRadius: 8 }}
-                  >
-                    {l.name}
-                  </button>
-                )}
-              </div>
-            ))}
-            <button onClick={handleCreateList} className="secondary" style={{ padding: '5px 10px', fontSize: 18, lineHeight: 1, borderRadius: 8 }}>+</button>
-          </div>
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          if (renameVal) watchlistStore.renameList(l.id, renameVal);
+                          setRenamingId(null);
+                          refresh();
+                        }
+                      }}
+                      autoFocus
+                      style={{ width: 100, padding: '4px 8px', fontSize: 12, borderRadius: 6 }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => { setActiveListId(l.id); watchlistStore.setActive(l.id); }}
+                      onDoubleClick={() => { setRenamingId(l.id); setRenameVal(l.name); }}
+                      className={activeListId === l.id ? '' : 'secondary'}
+                      style={{ padding: '5px 12px', fontSize: 12, borderRadius: 8 }}
+                    >
+                      {l.name}
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button onClick={handleCreateList} className="secondary" style={{ padding: '5px 10px', fontSize: 18, lineHeight: 1, borderRadius: 8 }}>+</button>
+            </div>
 
-          {/* Action Bar */}
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={handleExport} className="secondary" style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}>⬇ Export</button>
-            <button onClick={handleImport} className="secondary" style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}>⬆ Import</button>
-            {lists.length > 1 && <button onClick={() => handleDeleteList(activeListId)} className="secondary" style={{ fontSize: 11, padding: '5px 10px', color: '#f87171' }}>🗑</button>}
-          </div>
+            {/* Action Bar */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={handleExport} className="secondary" style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}>⬇ Export</button>
+              <button onClick={handleImport} className="secondary" style={{ fontSize: 11, padding: '5px 10px', flex: 1 }}>⬆ Import</button>
+              {lists.length > 1 && <button onClick={() => handleDeleteList(activeListId)} className="secondary" style={{ fontSize: 11, padding: '5px 10px', color: '#f87171' }}>🗑</button>}
+            </div>
 
-          {/* Search Bar */}
-          <div ref={searchRef} style={{ position: 'relative' }}>
-            <input
-              value={searchQ}
-              onChange={e => { setSearchQ(e.target.value); setShowSearch(true); }}
-              onFocus={() => setShowSearch(true)}
-              placeholder="🔍  Search by name or symbol..."
-              style={{ width: '100%', padding: '10px 14px', fontSize: 13 }}
-            />
-            {showSearch && searchResults.length > 0 && (
-              <div style={{
-                position: 'absolute', top: '110%', left: 0, right: 0,
-                background: '#111827', border: '1px solid rgba(99,102,241,0.3)',
-                borderRadius: 10, zIndex: 100, overflow: 'hidden',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-              }}>
-                {searchResults.map(r => (
-                  <div
-                    key={r.symbol}
-                    onClick={() => handleAddStock(r.symbol, r.exchange)}
-                    style={{
-                      padding: '10px 14px', cursor: 'pointer', display: 'flex',
-                      justifyContent: 'space-between', alignItems: 'center',
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{r.symbol}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.name}</div>
-                    </div>
-                    <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4 }}>
-                      {r.exchange} +
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Column Headers */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '28px 1fr 90px 80px 70px 80px 80px 50px',
-            gap: 8, padding: '4px 14px', fontSize: 10, color: 'var(--muted)', fontWeight: 600,
-            textTransform: 'uppercase', letterSpacing: 0.5,
-          }}>
-            <span />
-            <span>Symbol</span>
-            <span style={{ textAlign: 'right' }}>LTP</span>
-            <span style={{ textAlign: 'right' }}>Chg%</span>
-            <span style={{ textAlign: 'right' }}>Chg₹</span>
-            <span style={{ textAlign: 'right' }}>Volume</span>
-            <span>H/L</span>
-            <span />
-          </div>
-
-          {/* Stock Rows */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', maxHeight: '60vh' }}>
-            {stocks.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 30, fontSize: 13 }}>
-                Search and add stocks to your watchlist
-              </div>
-            ) : stocks.map(stock => (
-              <StockRow
-                key={stock.symbol}
-                stock={stock}
-                quote={quotes[stock.symbol] || getMockQuote(stock.symbol)}
-                isSelected={selectedSymbol === stock.symbol}
-                onSelect={() => setSelectedSymbol(stock.symbol)}
-                onRemove={() => handleRemove(stock.symbol)}
-                onPin={() => handlePin(stock.symbol)}
+            {/* Search Bar */}
+            <div ref={searchRef} style={{ position: 'relative' }}>
+              <input
+                value={searchQ}
+                onChange={e => { setSearchQ(e.target.value); setShowSearch(true); }}
+                onFocus={() => setShowSearch(true)}
+                placeholder="🔍  Search by name or symbol..."
+                style={{ width: '100%', padding: '10px 14px', fontSize: 13 }}
               />
-            ))}
-          </div>
-        </div>
+              {showSearch && searchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '110%', left: 0, right: 0,
+                  background: '#111827', border: '1px solid rgba(99,102,241,0.3)',
+                  borderRadius: 10, zIndex: 100, overflow: 'hidden',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                }}>
+                  {searchResults.map(r => (
+                    <div
+                      key={r.symbol}
+                      onClick={() => handleAddStock(r.symbol, r.exchange)}
+                      style={{
+                        padding: '10px 14px', cursor: 'pointer', display: 'flex',
+                        justifyContent: 'space-between', alignItems: 'center',
+                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{r.symbol}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.name}</div>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4 }}>
+                        {r.exchange} +
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-        {/* RIGHT: Chart Panel */}
-        <div>
-          <TradingChart symbol={selectedSymbol} />
-        </div>
+            {/* Column Headers */}
+            <div style={{
+              display: 'grid', 
+              gridTemplateColumns: isMobile ? '24px 1fr 75px 70px 30px' : '28px 1fr 90px 80px 70px 80px 80px 50px',
+              gap: 8, padding: '4px 14px', fontSize: 10, color: 'var(--muted)', fontWeight: 600,
+              textTransform: 'uppercase', letterSpacing: 0.5,
+            }}>
+              <span />
+              <span>Symbol</span>
+              <span style={{ textAlign: 'right' }}>LTP</span>
+              <span style={{ textAlign: 'right' }}>Chg%</span>
+              {!isMobile && <span style={{ textAlign: 'right' }}>Chg₹</span>}
+              {!isMobile && <span style={{ textAlign: 'right' }}>Volume</span>}
+              {!isMobile && <span>H/L</span>}
+              <span />
+            </div>
+
+            {/* Stock Rows */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', maxHeight: isMobile ? '60vh' : '65vh' }}>
+              {stocks.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 30, fontSize: 13 }}>
+                  Search and add stocks to your watchlist
+                </div>
+              ) : stocks.map(stock => (
+                <StockRow
+                  key={stock.symbol}
+                  stock={stock}
+                  quote={quotes[stock.symbol] || getMockQuote(stock.symbol)}
+                  isSelected={selectedSymbol === stock.symbol}
+                  isMobile={isMobile}
+                  onSelect={() => {
+                    setSelectedSymbol(stock.symbol);
+                    if (isMobile) {
+                      setMobileView('chart');
+                    }
+                  }}
+                  onRemove={() => handleRemove(stock.symbol)}
+                  onPin={() => handlePin(stock.symbol)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Chart Panel (Right on Desktop, conditional on Mobile) */}
+        {(!isMobile || mobileView === 'chart') && (
+          <div>
+            <TradingChart symbol={selectedSymbol} />
+          </div>
+        )}
       </div>
     </div>
   );

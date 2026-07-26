@@ -560,6 +560,41 @@ tr:hover td {
   }
 }
 
+/* ── Layout wrappers for Chat & Watchlist pages ──────────────────────────────── */
+.ai-chat-layout {
+  display: flex;
+  gap: 24px;
+}
+
+.watchlist-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  min-height: 75vh;
+}
+
+/* ── Mobile adjustments for the layouts ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ai-chat-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .ai-chat-layout > .card {
+    height: 480px !important; /* reduce height on mobile to save scroll */
+  }
+
+  .ai-chat-layout > div:last-child {
+    width: 100% !important;
+  }
+
+  .watchlist-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: auto;
+  }
+}
+
 /* ── iPhone notch / safe area support ──────────────────────────────────────── */
 @supports (padding: max(0px)) {
   @media (max-width: 768px) {

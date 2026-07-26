@@ -128,7 +128,7 @@ export default function AIChat() {
         Hybrid AI with zero-guessing data integration: instant local commands + Groq LLaMA 3.3 with real price, news & backtest tools.
       </p>
 
-      <div style={{ display: 'flex', gap: 24 }}>
+      <div className="ai-chat-layout">
         {/* Main Chat */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '680px' }} className="card">
           {/* Messages */}
