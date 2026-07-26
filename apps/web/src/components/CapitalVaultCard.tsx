@@ -5,6 +5,9 @@ export function CapitalVaultCard() {
   const [vaultData, setVaultData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [inputAmount, setInputAmount] = useState<string>('1000');
+  const [allocMode, setAllocMode] = useState<'paper' | 'live'>('paper');
+  const [paperAmount, setPaperAmount] = useState<string>('1000');
+  const [liveAmount, setLiveAmount] = useState<string>('1000');
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -206,113 +209,145 @@ export function CapitalVaultCard() {
         </div>
       </div>
 
-      {/* Allotment Control Form */}
+      {/* ── Split Capital Allotment Control ───────────────────────────── */}
       <div style={{
         background: 'rgba(0, 0, 0, 0.25)',
         padding: 16,
         borderRadius: 12,
         border: '1px solid rgba(255, 255, 255, 0.08)'
       }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#e0e7ff', marginBottom: 10 }}>
-          💵 Manager Capital Allotment Control:
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#e0e7ff', marginBottom: 12 }}>
+          💵 Capital Allotment Control:
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: '1 1 200px' }}>
-            <span style={{ position: 'absolute', left: 12, top: 9, color: 'var(--muted)', fontSize: 14 }}>₹</span>
-            <input
-              type="number"
-              value={inputAmount}
-              onChange={(e) => setInputAmount(e.target.value)}
-              placeholder="Enter amount (e.g. 100 or 5000)"
-              style={{
-                width: '100%',
-                padding: '8px 12px 8px 28px',
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(15, 23, 42, 0.8)',
-                color: '#fff',
-                fontSize: 14,
-                fontFamily: 'monospace'
-              }}
-            />
+        {/* Mode Selector Tabs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button
+            onClick={() => setAllocMode('paper')}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 9,
+              border: `1px solid ${allocMode === 'paper' ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.08)'}`,
+              background: allocMode === 'paper' ? 'rgba(99,102,241,0.18)' : 'transparent',
+              color: allocMode === 'paper' ? '#a5b4fc' : 'var(--muted)',
+              fontWeight: allocMode === 'paper' ? 700 : 500, fontSize: 13, cursor: 'pointer',
+            }}>
+            🛡️ Paper Trading
+          </button>
+          <button
+            onClick={() => setAllocMode('live')}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 9,
+              border: `1px solid ${allocMode === 'live' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)'}`,
+              background: allocMode === 'live' ? 'rgba(239,68,68,0.12)' : 'transparent',
+              color: allocMode === 'live' ? '#f87171' : 'var(--muted)',
+              fontWeight: allocMode === 'live' ? 700 : 500, fontSize: 13, cursor: 'pointer',
+            }}>
+            ⚡ Live Angel One
+          </button>
+        </div>
+
+        {/* Paper Trading Panel */}
+        {allocMode === 'paper' && (
+          <div>
+            <div style={{ fontSize: 12, color: '#818cf8', marginBottom: 10 }}>
+              Allocate virtual capital for paper trading. No real money involved.
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: '1 1 180px' }}>
+                <span style={{ position: 'absolute', left: 12, top: 9, color: 'var(--muted)', fontSize: 14 }}>₹</span>
+                <input
+                  type="number"
+                  value={paperAmount}
+                  onChange={e => { setPaperAmount(e.target.value); setInputAmount(e.target.value); }}
+                  placeholder="e.g. 5000"
+                  style={{
+                    width: '100%', padding: '8px 12px 8px 28px', borderRadius: 8,
+                    border: '1px solid rgba(99,102,241,0.25)',
+                    background: 'rgba(15,23,42,0.8)', color: '#fff',
+                    fontSize: 14, fontFamily: 'monospace', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <button onClick={() => handleAllocate(parseFloat(paperAmount))} disabled={isSubmitting} style={{
+                padding: '9px 16px', background: 'linear-gradient(135deg,#4f46e5,#6366f1)',
+                color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13,
+              }}>
+                {isSubmitting ? '…' : '➕ Allot'}
+              </button>
+              <button onClick={handleDeallocate} disabled={isSubmitting} style={{
+                padding: '9px 16px', background: 'rgba(239,68,68,0.12)',
+                color: '#f87171', border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13,
+              }}>➖ Release</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Quick:</span>
+              {[500, 2000, 5000, 10000, 50000].map(p => (
+                <button key={p} onClick={() => { setPaperAmount(String(p)); handleAllocate(p); }} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)',
+                  color: '#818cf8', fontSize: 12, cursor: 'pointer', fontFamily: 'monospace',
+                }}>+₹{p >= 1000 ? `${p / 1000}k` : p}</button>
+              ))}
+            </div>
           </div>
+        )}
 
-          <button
-            onClick={() => handleAllocate()}
-            disabled={isSubmitting}
-            style={{
-              padding: '9px 18px',
-              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: 13,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            {isSubmitting ? 'Processing…' : '➕ Allot Capital'}
-          </button>
-
-          <button
-            onClick={handleDeallocate}
-            disabled={isSubmitting}
-            style={{
-              padding: '9px 18px',
-              background: 'rgba(239, 68, 68, 0.15)',
-              color: '#f87171',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 8,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: 13
-            }}
-          >
-            ➖ Release Capital
-          </button>
-        </div>
-
-        {/* Preset Quick Buttons */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>Quick Presets:</span>
-          {[100, 500, 2000, 5000, 10000].map((preset) => (
-            <button
-              key={preset}
-              onClick={() => {
-                setInputAmount(preset.toString());
-                handleAllocate(preset);
-              }}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 6,
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#cbd5e1',
-                fontSize: 12,
-                cursor: 'pointer',
-                fontFamily: 'monospace'
-              }}
-            >
-              +₹{preset >= 1000 ? `${preset / 1000}k` : preset}
-            </button>
-          ))}
-        </div>
+        {/* Live Trading Panel */}
+        {allocMode === 'live' && (
+          <div>
+            <div style={{ fontSize: 12, color: '#fca5a5', marginBottom: 10 }}>
+              ⚠️ Allocating live capital means the copilot can place real orders on Angel One.
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: '1 1 180px' }}>
+                <span style={{ position: 'absolute', left: 12, top: 9, color: 'var(--muted)', fontSize: 14 }}>₹</span>
+                <input
+                  type="number"
+                  value={liveAmount}
+                  onChange={e => { setLiveAmount(e.target.value); setInputAmount(e.target.value); }}
+                  placeholder="e.g. 10000"
+                  style={{
+                    width: '100%', padding: '8px 12px 8px 28px', borderRadius: 8,
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    background: 'rgba(15,23,42,0.8)', color: '#fff',
+                    fontSize: 14, fontFamily: 'monospace', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <button onClick={() => handleAllocate(parseFloat(liveAmount))} disabled={isSubmitting} style={{
+                padding: '9px 16px', background: 'linear-gradient(135deg,#dc2626,#ef4444)',
+                color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13,
+                boxShadow: '0 2px 12px rgba(239,68,68,0.25)',
+              }}>
+                {isSubmitting ? '…' : '➕ Allot LIVE'}
+              </button>
+              <button onClick={handleDeallocate} disabled={isSubmitting} style={{
+                padding: '9px 16px', background: 'rgba(239,68,68,0.12)',
+                color: '#f87171', border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13,
+              }}>➖ Release</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Quick:</span>
+              {[2000, 5000, 10000, 25000, 50000].map(p => (
+                <button key={p} onClick={() => { setLiveAmount(String(p)); handleAllocate(p); }} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+                  color: '#f87171', fontSize: 12, cursor: 'pointer', fontFamily: 'monospace',
+                }}>+₹{p >= 1000 ? `${p / 1000}k` : p}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Action Status Feedback */}
         {actionMessage && (
           <div style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            background: actionMessage.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-            border: `1px solid ${actionMessage.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-            color: actionMessage.type === 'success' ? '#34d399' : '#f87171'
+            marginTop: 12, padding: '8px 12px', borderRadius: 6, fontSize: 13, fontWeight: 500,
+            background: actionMessage.type === 'success' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+            border: `1px solid ${actionMessage.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+            color: actionMessage.type === 'success' ? '#34d399' : '#f87171',
           }}>
             {actionMessage.text}
           </div>

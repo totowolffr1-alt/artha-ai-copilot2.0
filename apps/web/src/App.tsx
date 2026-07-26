@@ -7,6 +7,7 @@ import Watchlist from './pages/Watchlist';
 import Backtesting from './pages/Backtesting';
 import NewsIntelligence from './pages/NewsIntelligence';
 import SystemHealth from './pages/SystemHealth';
+import ManualTrade from './pages/ManualTrade';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Desktop sidebar nav
@@ -14,6 +15,7 @@ const NAV = [
   { to: '/',            label: '📊 Dashboard' },
   { to: '/watchlist',   label: '📈 Watchlist' },
   { to: '/portfolio',   label: '💼 Portfolio' },
+  { to: '/trade',       label: '⚡ Trade' },
   { to: '/ai-chat',     label: '🤖 AI Copilot' },
   { to: '/backtesting', label: '🧪 Backtesting' },
   { to: '/news',        label: '📰 News Intel' },
@@ -25,7 +27,7 @@ const MOBILE_TABS = [
   { to: '/',          icon: '📊', label: 'Home'      },
   { to: '/watchlist', icon: '📈', label: 'Watchlist' },
   { to: '/portfolio', icon: '💼', label: 'Portfolio' },
-  { to: '/ai-chat',   icon: '🤖', label: 'AI'        },
+  { to: '/trade',     icon: '⚡',  label: 'Trade'     },
   { to: '/system',    icon: '⚙️', label: 'System'   },
 ];
 
@@ -106,6 +108,7 @@ export default function App() {
             <Route path="/"            element={wrap(<Dashboard />)} />
             <Route path="/watchlist"   element={wrap(<Watchlist />)} />
             <Route path="/portfolio"   element={wrap(<Portfolio />)} />
+            <Route path="/trade"       element={wrap(<ManualTrade />)} />
             <Route path="/ai-chat"     element={wrap(<AIChat />)} />
             <Route path="/backtesting" element={wrap(<Backtesting />)} />
             <Route path="/news"        element={wrap(<NewsIntelligence />)} />
