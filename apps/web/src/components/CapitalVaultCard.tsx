@@ -97,6 +97,10 @@ export function CapitalVaultCard() {
   };
 
   const isLowCapital = (vault.allocatedCapital ?? 0) < 2000;
+  const isLiveMode = vault.mode === 'LIVE';
+  const brokerageWarning = isLiveMode && isLowCapital
+    ? `⚠️ Allocation ₹${(vault.allocatedCapital ?? 0).toLocaleString('en-IN')} is below ₹2,000. Round-trip brokerage (₹40) will consume a large percentage of your returns. Consider adding more capital.`
+    : (vaultData?.vault as any)?.brokerageWarning as string | undefined;
 
   return (
     <div className="card" style={{
@@ -135,16 +139,32 @@ export function CapitalVaultCard() {
           borderRadius: 12,
           fontSize: 12,
           fontWeight: 600,
-          background: isLowCapital ? 'rgba(245, 158, 11, 0.12)' : 'rgba(99, 102, 241, 0.15)',
-          border: `1px solid ${isLowCapital ? 'rgba(245, 158, 11, 0.3)' : 'rgba(99, 102, 241, 0.4)'}`,
-          color: isLowCapital ? '#fbbf24' : '#818cf8',
+          background: isLiveMode ? 'rgba(239, 68, 68, 0.12)' : 'rgba(99, 102, 241, 0.15)',
+          border: `1px solid ${isLiveMode ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.4)'}`,
+          color: isLiveMode ? '#f87171' : '#818cf8',
           display: 'flex',
           alignItems: 'center',
           gap: 6
         }}>
-          <span>{isLowCapital ? '🛡️ PAPER EXECUTION (< ₹2,000)' : '⚡ LIVE ANGEL ONE EXECUTION'}</span>
+          <span>{isLiveMode ? '⚡ LIVE ANGEL ONE EXECUTION' : '🛡️ PAPER TRADING MODE'}</span>
         </div>
       </div>
+
+      {/* Brokerage Advisory Warning (soft — not a block) */}
+      {brokerageWarning && (
+        <div style={{
+          margin: '0 0 16px 0',
+          padding: '10px 14px',
+          borderRadius: 10,
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          color: '#fbbf24',
+          fontSize: 12,
+          lineHeight: 1.5,
+        }}>
+          {brokerageWarning}
+        </div>
+      )}
 
       {/* Vault Balance Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 20 }}>

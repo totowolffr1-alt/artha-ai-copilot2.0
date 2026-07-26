@@ -20,7 +20,7 @@
 import { EventEmitter } from 'events';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-export const MIN_ALLOCATION       = 100;          // ₹100 absolute minimum
+export const MIN_ALLOCATION       = 0;            // No minimum allocation constraint
 export const MIN_LIVE_TRADE_VALUE = 2_000;        // Below this = auto paper-trade
 export const DAILY_LOSS_LIMIT_PCT = 0.05;         // 5% of allocation per day
 export const DRAWDOWN_PAUSE_PCT   = 0.15;         // 15% drawdown from peak → pause
@@ -97,11 +97,8 @@ export class CapitalVault extends EventEmitter {
    * ₹100–₹10,00,000. Any amount below MIN_ALLOCATION is rejected.
    */
   setAllocation(amount: number): { success: boolean; message: string } {
-    if (amount < MIN_ALLOCATION) {
-      return { success: false, message: `Minimum allocation is ₹${MIN_ALLOCATION}.` };
-    }
-    if (amount > 10_00_000) {
-      return { success: false, message: `Maximum allocation is ₹10,00,000.` };
+    if (amount < 0) {
+      return { success: false, message: `Allocation cannot be negative.` };
     }
 
     const isTopUp = this.allocatedCapital > 0;
@@ -109,12 +106,6 @@ export class CapitalVault extends EventEmitter {
     this.allocatedCapital = amount;
     this.availableCapital = Math.max(0, this.availableCapital + delta);
     this.peakCapital = Math.max(this.peakCapital, amount);
-
-    // Auto-mode: if allocation < MIN_LIVE_TRADE_VALUE → enforce PAPER mode
-    if (amount < MIN_LIVE_TRADE_VALUE && this.mode === 'LIVE') {
-      this.mode = 'PAPER';
-      this.emit('MODE_CHANGED', { mode: 'PAPER', reason: `Allocation ₹${amount} below ₹${MIN_LIVE_TRADE_VALUE} minimum for live trading.` });
-    }
 
     // Reset state if it was paused due to drawdown
     if (this.state === 'DRAWDOWN_PAUSED' || this.state === 'DAILY_LIMIT_HIT') {
@@ -138,14 +129,14 @@ export class CapitalVault extends EventEmitter {
    * LIVE mode is blocked if allocation < MIN_LIVE_TRADE_VALUE.
    */
   setMode(mode: VaultMode): { success: boolean; message: string } {
-    if (mode === 'LIVE' && this.allocatedCapital < MIN_LIVE_TRADE_VALUE) {
-      return {
-        success: false,
-        message: `Cannot switch to LIVE mode. Minimum capital for live trading is ₹${MIN_LIVE_TRADE_VALUE.toLocaleString('en-IN')} (to cover ₹40 round-trip brokerage). Current allocation: ₹${this.allocatedCapital}. Either top-up or continue in PAPER mode.`,
-      };
-    }
     this.mode = mode;
     this.emit('MODE_CHANGED', { mode });
+    if (mode === 'LIVE' && this.allocatedCapital < MIN_LIVE_TRADE_VALUE) {
+      return {
+        success: true,
+        message: `Switched to LIVE mode. Note: Your allocation ₹${this.allocatedCapital} is below the recommended ₹${MIN_LIVE_TRADE_VALUE} minimum (brokerage costs will be high).`,
+      };
+    }
     return { success: true, message: `Mode switched to ${mode}.` };
   }
 
@@ -306,8 +297,8 @@ export class CapitalVault extends EventEmitter {
       : 0;
     const dailyLossLimit = this.allocatedCapital * DAILY_LOSS_LIMIT_PCT;
 
-    const brokerageWarning = this.allocatedCapital < MIN_LIVE_TRADE_VALUE
-      ? `⚠️ Allocation ₹${this.allocatedCapital} is below ₹${MIN_LIVE_TRADE_VALUE}. Live trading is disabled (brokerage ₹40/round-trip would exceed 2% cost). Add more capital to enable live mode.`
+    const brokerageWarning = this.allocatedCapital < MIN_LIVE_TRADE_VALUE && this.mode === 'LIVE'
+      ? `⚠️ Allocation ₹${this.allocatedCapital} is below the recommended ₹${MIN_LIVE_TRADE_VALUE} for live trading. Round-trip brokerage (₹40) will consume a high percentage of your trade returns.`
       : undefined;
 
     return {
