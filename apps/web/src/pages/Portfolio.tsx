@@ -99,13 +99,14 @@ export default function Portfolio() {
     positions: Position[];
     unrealizedPnl: number;
     isMarketCloseSoon: boolean;
+    error?: string;
   }>({ positions: [], unrealizedPnl: 0, isMarketCloseSoon: false });
 
   // Paper tab state
   const [paperData, setPaperData] = useState<{
     trades: PaperTrade[];
-    summary: { winRate: number; totalPnL: number; totalTrades: number; avgRMultiple: number; sharpe: number };
-  }>({ trades: [], summary: { winRate: 0, totalPnL: 0, totalTrades: 0, avgRMultiple: 0, sharpe: 0 } });
+    summary: { winRate: number; totalPnL: number; totalTrades: number; avgRMultiple: number; sharpe?: number };
+  }>({ trades: [], summary: { winRate: 0, totalPnL: 0, totalTrades: 0, avgRMultiple: 0 } });
 
   // Fetch all data on mount + tab change
   useEffect(() => {
@@ -259,7 +260,14 @@ export default function Portfolio() {
                 </thead>
                 <tbody>
                   {positionsData.positions.length === 0 ? (
-                    <tr><td colSpan={8} style={{ ...TABLE_CELL, textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No open positions today</td></tr>
+                    <tr><td colSpan={8} style={{ ...TABLE_CELL, textAlign: 'center', padding: 36 }}>
+                      <div style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 8 }}>No open intraday / F&amp;O positions</div>
+                      {(positionsData as any).error && (
+                        <div style={{ fontSize: 12, color: '#f87171', background: 'rgba(239,68,68,0.08)', padding: '6px 12px', borderRadius: 8, display: 'inline-block' }}>
+                          ⚠️ {(positionsData as any).error}
+                        </div>
+                      )}
+                    </td></tr>
                   ) : positionsData.positions.map((p, i) => (
                     <tr key={i}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
@@ -290,11 +298,10 @@ export default function Portfolio() {
             gap: 14, marginBottom: 20,
           }}>
             {[
-              { label: 'Win Rate', value: `${paperData.summary.winRate}%`, color: paperData.summary.winRate >= 50 ? '#34d399' : '#f87171' },
-              { label: 'Total P&L', value: fmtRs(paperData.summary.totalPnL), color: pnlColor(paperData.summary.totalPnL) },
-              { label: 'Total Trades', value: paperData.summary.totalTrades, color: '#a78bfa' },
-              { label: 'Avg R-Multiple', value: `${paperData.summary.avgRMultiple}R`, color: paperData.summary.avgRMultiple >= 1 ? '#34d399' : '#fbbf24' },
-              { label: 'Sharpe Ratio', value: paperData.summary.sharpe.toFixed(2), color: paperData.summary.sharpe >= 1 ? '#34d399' : '#fbbf24' },
+              { label: 'Win Rate',     value: `${paperData.summary.winRate}%`,         color: paperData.summary.winRate >= 50 ? '#34d399' : '#f87171' },
+              { label: 'Total P&L',    value: fmtRs(paperData.summary.totalPnL),       color: pnlColor(paperData.summary.totalPnL) },
+              { label: 'Total Trades', value: paperData.summary.totalTrades,            color: '#a78bfa' },
+              { label: 'Avg R-Multiple', value: `${paperData.summary.avgRMultiple}R`,   color: paperData.summary.avgRMultiple >= 1 ? '#34d399' : '#fbbf24' },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: '14px 16px', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{s.label}</div>
@@ -315,7 +322,10 @@ export default function Portfolio() {
                 </thead>
                 <tbody>
                   {paperData.trades.length === 0 ? (
-                    <tr><td colSpan={9} style={{ ...TABLE_CELL, textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No paper trades yet. Copilot will log trades here once active.</td></tr>
+                    <tr><td colSpan={9} style={{ ...TABLE_CELL, textAlign: 'center', padding: 36 }}>
+                      <div style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 6 }}>🧪 No paper trades yet</div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Trades will appear here once the copilot executes paper orders</div>
+                    </td></tr>
                   ) : paperData.trades.map(t => (
                     <tr key={t.id}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}

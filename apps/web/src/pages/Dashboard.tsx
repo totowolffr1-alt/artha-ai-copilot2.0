@@ -222,8 +222,10 @@ export default function Dashboard() {
 
         {/* Trade Table */}
         {copilotData.trades.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: 14 }}>
-            No trades placed yet — Copilot is watching the market 👀
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>🤖</div>
+            <div style={{ color: '#e0e7ff', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No trades executed yet</div>
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>Copilot will log real trades here when it executes — no demo data</div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

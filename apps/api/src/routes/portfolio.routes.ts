@@ -1,7 +1,7 @@
 /**
  * portfolio.routes.ts
- * Uses shared brokerSession singleton — no duplicate auth, no rate limiting.
- * Holdings cached for 2 minutes to prevent AG8002 "Access denied" errors.
+ * Real data ONLY from Angel One SmartAPI.
+ * No demo data, no fake fallbacks — honest empty states when broker is unavailable.
  */
 
 import { Router, Request, Response } from 'express';
@@ -74,7 +74,7 @@ async function fetchRealHoldings() {
             ?? holdings.reduce((s, h) => s + h.pnl, 0);
 
           const result = { holdings, totalValue, overallPnl };
-          setCachedHoldings(result); // Cache for 2 minutes
+          setCachedHoldings(result);
           console.log(`[Portfolio] ✅ Fetched ${holdings.length} holding(s) from Angel One.`);
           return result;
         }
@@ -112,34 +112,20 @@ async function fetchRealFunds(): Promise<number> {
   return 0;
 }
 
-// ── Demo Data ──────────────────────────────────────────────────────────────────
-const DEMO_RESPONSE = {
-  connected: true,
-  broker: 'Angel One (Demo)',
-  totalValue: 333690,
-  todayPnl: 3240,
-  overallPnl: 10190,
-  availableFunds: 125000,
-  holdings: [
-    { symbol: 'RELIANCE',  qty: 50,  avgPrice: 2820, ltp: 2880, pnl: 3000,  pnlPct: 4.25, currentValue: 144000 },
-    { symbol: 'TCS',       qty: 20,  avgPrice: 3550, ltp: 3612, pnl: 1240,  pnlPct: 1.75, currentValue:  72240 },
-    { symbol: 'CUPID',     qty: 250, avgPrice:  198, ltp:  215, pnl: 4350,  pnlPct: 8.78, currentValue:  53750 },
-    { symbol: 'INFY',      qty: 40,  avgPrice: 1550, ltp: 1590, pnl: 1600,  pnlPct: 2.58, currentValue:  63600 },
-  ],
-  demoMode: true,
-};
-
 // ── GET /api/portfolio ─────────────────────────────────────────────────────────
 portfolioRouter.get('/', async (_req: Request, res: Response) => {
-  if (process.env.DEMO_MODE === 'true') return res.json(DEMO_RESPONSE);
-
   const token = await getJwtToken();
   if (!token) {
     const { lastError } = getSessionStatus();
     return res.json({
-      connected: false, broker: null, totalValue: 0, todayPnl: 0,
-      overallPnl: 0, availableFunds: 0, holdings: [], demoMode: false,
-      error: lastError || 'Angel One authentication failed.',
+      connected: false,
+      broker: null,
+      totalValue: 0,
+      todayPnl: 0,
+      overallPnl: 0,
+      availableFunds: 0,
+      holdings: [],
+      error: lastError || 'Angel One not connected. Check credentials in server environment.',
     });
   }
 
@@ -153,8 +139,7 @@ portfolioRouter.get('/', async (_req: Request, res: Response) => {
     overallPnl:     holdingsData?.overallPnl   ?? 0,
     availableFunds: funds,
     holdings:       holdingsData?.holdings     ?? [],
-    demoMode: false,
-    error: holdingsData ? undefined : 'Could not fetch holdings. Will retry next call.',
+    error: holdingsData ? undefined : 'Holdings fetch failed — whitelist server IP in Angel One portal.',
   });
 });
 
@@ -194,60 +179,69 @@ portfolioRouter.post('/disconnect', (_req: Request, res: Response) => {
 portfolioRouter.get('/positions', async (_req: Request, res: Response) => {
   const token = await getJwtToken();
 
-  if (token) {
-    const headers = await getApiHeaders();
-    try {
-      const { data } = await axios.get(
-        'https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/getPosition',
-        { headers, timeout: 8000 }
-      );
-      if (data?.status === true && Array.isArray(data?.data)) {
-        const positions = data.data.map((p: any) => ({
-          symbol:         p.tradingsymbol || p.symbolname || 'UNKNOWN',
-          product:        p.producttype || 'INTRADAY',
-          qty:            Math.abs(parseInt(p.netqty || p.buyqty || '0', 10)),
-          avgPrice:       parseFloat(p.avgnetprice || p.buyprice || '0'),
-          ltp:            parseFloat(p.ltp || '0'),
-          unrealizedPnl:  parseFloat(p.unrealised || p.pnl || '0'),
-          side:           parseInt(p.netqty || '0', 10) >= 0 ? 'BUY' : 'SELL',
-          exchange:       p.exchange || 'NSE',
-        }));
-        const unrealizedPnl = positions.reduce((s: number, p: any) => s + p.unrealizedPnl, 0);
-        const now = new Date();
-        const isMarketCloseSoon = now.getHours() === 15 && now.getMinutes() >= 30;
-        return res.json({ positions, unrealizedPnl, isMarketCloseSoon });
-      }
-    } catch {}
+  if (!token) {
+    return res.json({
+      positions: [],
+      unrealizedPnl: 0,
+      isMarketCloseSoon: false,
+      error: 'Angel One not connected.',
+    });
   }
 
-  // Demo / fallback positions
-  const now = new Date();
-  const isMarketCloseSoon = now.getHours() === 15 && now.getMinutes() >= 30;
-  res.json({
-    positions: [
-      { symbol: 'NIFTY26JULFUT', product: 'F&O', qty: 50, avgPrice: 24350, ltp: 24488, unrealizedPnl: 6900, side: 'BUY', exchange: 'NFO' },
-      { symbol: 'RELIANCE',      product: 'INTRADAY', qty: 10, avgPrice: 2868, ltp: 2880, unrealizedPnl: 120,  side: 'BUY', exchange: 'NSE' },
-    ],
-    unrealizedPnl: 7020,
-    isMarketCloseSoon,
-  });
+  const headers = await getApiHeaders();
+  try {
+    const { data } = await axios.get(
+      'https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/getPosition',
+      { headers, timeout: 8000 }
+    );
+    if (data?.status === true && Array.isArray(data?.data)) {
+      const positions = data.data
+        .map((p: any) => ({
+          symbol:        p.tradingsymbol || p.symbolname || 'UNKNOWN',
+          product:       p.producttype || 'INTRADAY',
+          qty:           Math.abs(parseInt(p.netqty || p.buyqty || '0', 10)),
+          avgPrice:      parseFloat(p.avgnetprice || p.buyprice || '0'),
+          ltp:           parseFloat(p.ltp || '0'),
+          unrealizedPnl: parseFloat(p.unrealised || p.pnl || '0'),
+          side:          parseInt(p.netqty || '0', 10) >= 0 ? 'BUY' : 'SELL',
+          exchange:      p.exchange || 'NSE',
+        }))
+        .filter((p: any) => p.qty > 0);
+
+      const unrealizedPnl = positions.reduce((s: number, p: any) => s + p.unrealizedPnl, 0);
+      const now = new Date();
+      const isMarketCloseSoon = now.getHours() === 15 && now.getMinutes() >= 30;
+      return res.json({ positions, unrealizedPnl, isMarketCloseSoon });
+    }
+
+    // Angel One returned a non-success (e.g. IP not whitelisted, session error)
+    const errorMsg = data?.message || data?.errorMessage || 'Position fetch failed';
+    return res.json({
+      positions: [],
+      unrealizedPnl: 0,
+      isMarketCloseSoon: false,
+      error: errorMsg,
+    });
+  } catch (err: any) {
+    return res.json({
+      positions: [],
+      unrealizedPnl: 0,
+      isMarketCloseSoon: false,
+      error: `Network error: ${err.message}`,
+    });
+  }
 });
 
-// ── In-memory paper trade store (populated by copilot engine later) ───────────
-const paperTrades = [
-  { id: 'pt-001', symbol: 'CUPID',    side: 'BUY',  qty: 100, entryPrice: 202.00, exitPrice: 215.40, netPnl: 1340, rMultiple: 2.1, status: 'CLOSED', strategy: 'VOLATILITY_SQUEEZE', openedAt: new Date(Date.now() - 48 * 3600000).toISOString(), closedAt: new Date(Date.now() - 46 * 3600000).toISOString() },
-  { id: 'pt-002', symbol: 'ZOMATO',   side: 'SELL', qty: 200, entryPrice: 271.20, exitPrice: 264.80, netPnl: 1280, rMultiple: 1.8, status: 'CLOSED', strategy: 'RSI_MEAN_REVERSION', openedAt: new Date(Date.now() - 36 * 3600000).toISOString(), closedAt: new Date(Date.now() - 34 * 3600000).toISOString() },
-  { id: 'pt-003', symbol: 'SBIN',     side: 'BUY',  qty: 30,  entryPrice: 815.00, exitPrice: 821.80, netPnl: 204,  rMultiple: 0.9, status: 'CLOSED', strategy: 'MACD_CROSSOVER',     openedAt: new Date(Date.now() - 24 * 3600000).toISOString(), closedAt: new Date(Date.now() - 22 * 3600000).toISOString() },
-  { id: 'pt-004', symbol: 'TCS',      side: 'SELL', qty: 5,   entryPrice: 3610.0, exitPrice: 3598.5, netPnl: -57.5,rMultiple: -0.3,status: 'CLOSED', strategy: 'EMA_CROSSOVER',      openedAt: new Date(Date.now() - 12 * 3600000).toISOString(), closedAt: new Date(Date.now() - 10 * 3600000).toISOString() },
-  { id: 'pt-005', symbol: 'RELIANCE', side: 'BUY',  qty: 5,   entryPrice: 2862.5, exitPrice: null,   netPnl: 87.5, rMultiple: null, status: 'OPEN',   strategy: 'VOLATILITY_SQUEEZE', openedAt: new Date(Date.now() - 3 * 3600000).toISOString(), closedAt: undefined },
-];
+// ── In-memory paper trade store ───────────────────────────────────────────────
+// Starts empty. Populated only when copilot actually executes paper trades.
+export const paperTrades: any[] = [];
 
 // ── GET /api/portfolio/paper ──────────────────────────────────────────────────
 portfolioRouter.get('/paper', (_req: Request, res: Response) => {
-  const closed = paperTrades.filter(t => t.status === 'CLOSED');
-  const wins = closed.filter(t => t.netPnl > 0).length;
+  const closed  = paperTrades.filter(t => t.status === 'CLOSED');
+  const wins    = closed.filter(t => t.netPnl > 0).length;
   const winRate = closed.length > 0 ? Math.round((wins / closed.length) * 100) : 0;
-  const totalPnL = paperTrades.reduce((s, t) => s + t.netPnl, 0);
+  const totalPnL = paperTrades.reduce((s, t) => s + (t.netPnl || 0), 0);
   const avgR = closed.length > 0
     ? parseFloat((closed.reduce((s, t) => s + (t.rMultiple ?? 0), 0) / closed.length).toFixed(2))
     : 0;
@@ -256,10 +250,9 @@ portfolioRouter.get('/paper', (_req: Request, res: Response) => {
     trades: paperTrades,
     summary: {
       winRate,
-      totalPnL: parseFloat(totalPnL.toFixed(2)),
+      totalPnL:    parseFloat(totalPnL.toFixed(2)),
       totalTrades: paperTrades.length,
       avgRMultiple: avgR,
-      sharpe: 1.42, // placeholder — computed by risk engine in Phase B
     },
   });
 });
