@@ -3,6 +3,7 @@
  * Broker-grade manual order placement — search NSE stock → enter qty → BUY/SELL via Angel One
  */
 import { useState, useEffect, useRef } from 'react';
+import { getServerIp } from '../services/api';
 
 const BASE = '/api';
 
@@ -61,8 +62,15 @@ export default function ManualTrade() {
   const [status, setStatus]       = useState<OrderStatus>('idle');
   const [orderResult, setOrderResult] = useState<any>(null);
   const [errorMsg, setErrorMsg]   = useState('');
+  const [serverIp, setServerIp]   = useState('Fetching…');
+  const [copied, setCopied]       = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch server IP on mount
+  useEffect(() => {
+    getServerIp().then(setServerIp);
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -467,6 +475,42 @@ export default function ManualTrade() {
             }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#f87171', marginBottom: 6 }}>❌ Order Failed</div>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>{errorMsg}</div>
+
+              {/* Server IP Whitelist Helper Card */}
+              {errorMsg.toLowerCase().includes('not a registered ip') && (
+                <div style={{
+                  padding: '12px 14px', borderRadius: 10, marginBottom: 16,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: 4 }}>
+                    ⚠️ Server IP Changed
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>
+                    Vercel/Railway changes server outbound IPs dynamically. You must add this current IP to your Angel One API whitelist:
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <code style={{ flex: 1, background: '#090d16', padding: '6px 10px', borderRadius: 6, fontSize: 12, color: '#e0e7ff', border: '1px solid rgba(255,255,255,0.06)', fontFamily: 'monospace' }}>
+                      {serverIp}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(serverIp);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      style={{
+                        padding: '6px 12px', borderRadius: 6, border: 'none',
+                        background: copied ? '#059669' : '#4f46e5',
+                        color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        transition: 'background 0.2s',
+                      }}
+                    >
+                      {copied ? '✅ Copied' : '📋 Copy'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <button onClick={() => setStatus('idle')} style={{
                 padding: '8px 20px', borderRadius: 10,
                 background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',

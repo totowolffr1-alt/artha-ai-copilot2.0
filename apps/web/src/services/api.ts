@@ -269,3 +269,15 @@ export async function getPaperTrades() {
     return { trades: [], summary: { winRate: 0, totalPnL: 0, totalTrades: 0, avgRMultiple: 0, sharpe: 0 } };
   }
 }
+
+export async function getServerIp(): Promise<string> {
+  try {
+    const res = await fetch(`${BASE}/system/server-ip`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    return data.ip || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+

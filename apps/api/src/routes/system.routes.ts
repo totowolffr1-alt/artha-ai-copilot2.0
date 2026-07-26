@@ -228,3 +228,15 @@ systemRouter.delete('/price-alerts/:id', (req: Request, res: Response) => {
   priceAlerts.delete(id);
   res.json({ success: true });
 });
+
+// ── GET /api/system/server-ip ──────────────────────────────────────────────────
+systemRouter.get('/server-ip', async (_req: Request, res: Response) => {
+  try {
+    const axios = require('axios');
+    const { data } = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 });
+    res.json({ ip: data?.ip || 'unknown' });
+  } catch (err: any) {
+    res.json({ ip: 'unknown', error: err.message });
+  }
+});
+
