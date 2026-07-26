@@ -9,6 +9,7 @@ import NewsIntelligence from './pages/NewsIntelligence';
 import SystemHealth from './pages/SystemHealth';
 import ManualTrade from './pages/ManualTrade';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { AuthGate } from './components/AuthGate';
 
 // Desktop sidebar nav
 const NAV = [
@@ -73,65 +74,67 @@ function NotificationBell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <div className="app-shell">
+    <AuthGate>
+      <BrowserRouter>
+        <div className="app-shell">
 
-        {/* ── Mobile top header (hidden on desktop via CSS) ── */}
-        <header className="mobile-header">
-          <span className="mobile-header-logo">⚡ Artha AI</span>
-          <NotificationBell />
-        </header>
-
-        {/* ── Desktop / tablet sidebar ── */}
-        <aside className="sidebar">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 4 }}>
-            <h1 style={{ margin: 0 }}>Artha AI</h1>
+          {/* ── Mobile top header (hidden on desktop via CSS) ── */}
+          <header className="mobile-header">
+            <span className="mobile-header-logo">⚡ Artha AI</span>
             <NotificationBell />
-          </div>
-          <nav>
-            {NAV.map(item => (
+          </header>
+
+          {/* ── Desktop / tablet sidebar ── */}
+          <aside className="sidebar">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 4 }}>
+              <h1 style={{ margin: 0 }}>Artha AI</h1>
+              <NotificationBell />
+            </div>
+            <nav>
+              {NAV.map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </aside>
+
+          {/* ── Main content area ── */}
+          <main className="main">
+            <Routes>
+              <Route path="/"            element={wrap(<Dashboard />)} />
+              <Route path="/watchlist"   element={wrap(<Watchlist />)} />
+              <Route path="/portfolio"   element={wrap(<Portfolio />)} />
+              <Route path="/trade"       element={wrap(<ManualTrade />)} />
+              <Route path="/ai-chat"     element={wrap(<AIChat />)} />
+              <Route path="/backtesting" element={wrap(<Backtesting />)} />
+              <Route path="/news"        element={wrap(<NewsIntelligence />)} />
+              <Route path="/system"      element={wrap(<SystemHealth />)} />
+            </Routes>
+          </main>
+
+          {/* ── Mobile bottom tab bar (hidden on desktop via CSS) ── */}
+          <nav className="mobile-bottom-nav">
+            {MOBILE_TABS.map(tab => (
               <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) => (isActive ? 'active' : '')}
+                key={tab.to}
+                to={tab.to}
+                end={tab.to === '/'}
+                className={({ isActive }) => isActive ? 'active' : ''}
               >
-                {item.label}
+                <span className="tab-icon">{tab.icon}</span>
+                <span>{tab.label}</span>
               </NavLink>
             ))}
           </nav>
-        </aside>
 
-        {/* ── Main content area ── */}
-        <main className="main">
-          <Routes>
-            <Route path="/"            element={wrap(<Dashboard />)} />
-            <Route path="/watchlist"   element={wrap(<Watchlist />)} />
-            <Route path="/portfolio"   element={wrap(<Portfolio />)} />
-            <Route path="/trade"       element={wrap(<ManualTrade />)} />
-            <Route path="/ai-chat"     element={wrap(<AIChat />)} />
-            <Route path="/backtesting" element={wrap(<Backtesting />)} />
-            <Route path="/news"        element={wrap(<NewsIntelligence />)} />
-            <Route path="/system"      element={wrap(<SystemHealth />)} />
-          </Routes>
-        </main>
-
-        {/* ── Mobile bottom tab bar (hidden on desktop via CSS) ── */}
-        <nav className="mobile-bottom-nav">
-          {MOBILE_TABS.map(tab => (
-            <NavLink
-              key={tab.to}
-              to={tab.to}
-              end={tab.to === '/'}
-              className={({ isActive }) => isActive ? 'active' : ''}
-            >
-              <span className="tab-icon">{tab.icon}</span>
-              <span>{tab.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-      </div>
-    </BrowserRouter>
+        </div>
+      </BrowserRouter>
+    </AuthGate>
   );
 }

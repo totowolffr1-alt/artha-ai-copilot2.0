@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder, getCopilotTrades } from '../services/api';
 import { getMarketSession } from '../services/marketSession';
 import { CapitalVaultCard } from '../components/CapitalVaultCard';
+import { RiskDashboard } from '../components/RiskDashboard';
+import { OrderBook } from '../components/OrderBook';
 
 const INITIAL_SIGNALS: Signal[] = [
   {
@@ -268,6 +270,9 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* 🛡️ Risk Dashboard */}
+      <RiskDashboard />
+
       {/* Overview Stats */}
       <div className="grid">
         <div className="card stat-container">
@@ -379,6 +384,10 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* 📋 Order Book */}
+      <OrderBook />
+
     </div>
   );
 }
