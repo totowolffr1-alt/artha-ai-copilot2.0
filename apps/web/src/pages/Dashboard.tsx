@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder } from '../services/api';
+import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder, getCopilotTrades } from '../services/api';
 import { getMarketSession } from '../services/marketSession';
 import { CapitalVaultCard } from '../components/CapitalVaultCard';
 
@@ -53,6 +53,17 @@ export default function Dashboard() {
   const [vix] = useState(14.5);
   const [drawdown] = useState(-0.04);
   const [killSwitchActive] = useState(false);
+  const [copilotData, setCopilotData] = useState<{ trades: any[]; summary: any }>({
+    trades: [],
+    summary: { totalPnL: 0, openTrades: 0, todayTrades: 0, winRate: 0 },
+  });
+
+  // Poll copilot trades every 5 seconds
+  useEffect(() => {
+    getCopilotTrades().then(setCopilotData);
+    const id = setInterval(() => getCopilotTrades().then(setCopilotData), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     // Initial fetch of watchlist & closing prices
@@ -174,6 +185,88 @@ export default function Dashboard() {
 
       {/* 🤖 Quant Employee — Capital Vault Allotment Widget */}
       <CapitalVaultCard />
+
+      {/* 🤖 Copilot Activity — Live Trade Monitor */}
+      <div className="card" style={{
+        padding: 24,
+        marginBottom: 24,
+        background: 'linear-gradient(135deg, rgba(17,24,39,0.95) 0%, rgba(15,23,42,0.6) 100%)',
+        border: '1px solid rgba(99,102,241,0.2)',
+        borderRadius: 16,
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>🤖 Copilot Activity</span>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981', animation: 'pulse 2s infinite' }} />
+          </h3>
+          <span style={{ fontSize: 11, color: 'var(--muted)', background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: 8 }}>Auto-refreshes every 5s</span>
+        </div>
+
+        {/* Summary Stats Row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12, marginBottom: 20 }}>
+          {[
+            { label: 'Total P&L', value: `${copilotData.summary.totalPnL >= 0 ? '+' : ''}₹${copilotData.summary.totalPnL.toFixed(2)}`, color: copilotData.summary.totalPnL >= 0 ? '#34d399' : '#f87171' },
+            { label: 'Open Trades', value: copilotData.summary.openTrades, color: '#60a5fa' },
+            { label: "Today's Trades", value: copilotData.summary.todayTrades, color: '#a78bfa' },
+            { label: 'Win Rate', value: `${copilotData.summary.winRate}%`, color: copilotData.summary.winRate >= 50 ? '#34d399' : '#f87171' },
+          ].map(stat => (
+            <div key={stat.label} style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{stat.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: stat.color, fontFamily: 'monospace' }}>{stat.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Trade Table */}
+        {copilotData.trades.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: 14 }}>
+            No trades placed yet — Copilot is watching the market 👀
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  {['Symbol', 'Side', 'Qty', 'Entry', 'Curr. Price', 'P&L', 'Status', 'Mode'].map(h => (
+                    <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {copilotData.trades.map((t: any) => (
+                  <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, color: '#e0e7ff', fontFamily: 'monospace' }}>{t.symbol}</td>
+                    <td style={{ padding: '8px 10px', color: t.side === 'BUY' ? '#34d399' : '#f87171', fontWeight: 600 }}>{t.side}</td>
+                    <td style={{ padding: '8px 10px', color: '#e0e7ff', fontFamily: 'monospace' }}>{t.qty}</td>
+                    <td style={{ padding: '8px 10px', color: 'var(--muted)', fontFamily: 'monospace' }}>₹{t.entryPrice.toFixed(2)}</td>
+                    <td style={{ padding: '8px 10px', color: '#e0e7ff', fontFamily: 'monospace' }}>₹{t.currentPrice.toFixed(2)}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, fontFamily: 'monospace', color: t.pnl >= 0 ? '#34d399' : '#f87171' }}>
+                      {t.pnl >= 0 ? '+' : ''}₹{t.pnl.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '8px 10px' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: t.status === 'OPEN' ? 'rgba(96,165,250,0.15)' : t.status === 'PENDING' ? 'rgba(245,158,11,0.15)' : 'rgba(107,114,128,0.15)',
+                        color: t.status === 'OPEN' ? '#60a5fa' : t.status === 'PENDING' ? '#fbbf24' : '#9ca3af',
+                      }}>{t.status}</span>
+                    </td>
+                    <td style={{ padding: '8px 10px' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: t.mode === 'LIVE' ? 'rgba(239,68,68,0.12)' : 'rgba(99,102,241,0.12)',
+                        color: t.mode === 'LIVE' ? '#f87171' : '#818cf8',
+                      }}>{t.mode}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Overview Stats */}
       <div className="grid">

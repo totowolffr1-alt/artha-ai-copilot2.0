@@ -240,3 +240,32 @@ export async function deallocateCapital(amount: number) {
   return res.json();
 }
 
+export async function getCopilotTrades() {
+  try {
+    const res = await fetch(`${BASE}/trading/copilot-trades`);
+    if (!res.ok) throw new Error();
+    return res.json() as Promise<{ trades: any[]; summary: any }>;
+  } catch {
+    return { trades: [], summary: { totalPnL: 0, openTrades: 0, todayTrades: 0, winRate: 0 } };
+  }
+}
+
+export async function getPositions() {
+  try {
+    const res = await fetch(`${BASE}/portfolio/positions`);
+    if (!res.ok) throw new Error();
+    return res.json();
+  } catch {
+    return { positions: [], unrealizedPnl: 0, isMarketCloseSoon: false };
+  }
+}
+
+export async function getPaperTrades() {
+  try {
+    const res = await fetch(`${BASE}/portfolio/paper`);
+    if (!res.ok) throw new Error();
+    return res.json();
+  } catch {
+    return { trades: [], summary: { winRate: 0, totalPnL: 0, totalTrades: 0, avgRMultiple: 0, sharpe: 0 } };
+  }
+}

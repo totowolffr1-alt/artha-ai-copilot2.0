@@ -189,3 +189,77 @@ portfolioRouter.post('/disconnect', (_req: Request, res: Response) => {
   clearSession();
   res.json({ success: true, connected: false });
 });
+
+// ── GET /api/portfolio/positions (Intraday / F&O) ─────────────────────────────
+portfolioRouter.get('/positions', async (_req: Request, res: Response) => {
+  const token = await getJwtToken();
+
+  if (token) {
+    const headers = await getApiHeaders();
+    try {
+      const { data } = await axios.get(
+        'https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/getPosition',
+        { headers, timeout: 8000 }
+      );
+      if (data?.status === true && Array.isArray(data?.data)) {
+        const positions = data.data.map((p: any) => ({
+          symbol:         p.tradingsymbol || p.symbolname || 'UNKNOWN',
+          product:        p.producttype || 'INTRADAY',
+          qty:            Math.abs(parseInt(p.netqty || p.buyqty || '0', 10)),
+          avgPrice:       parseFloat(p.avgnetprice || p.buyprice || '0'),
+          ltp:            parseFloat(p.ltp || '0'),
+          unrealizedPnl:  parseFloat(p.unrealised || p.pnl || '0'),
+          side:           parseInt(p.netqty || '0', 10) >= 0 ? 'BUY' : 'SELL',
+          exchange:       p.exchange || 'NSE',
+        }));
+        const unrealizedPnl = positions.reduce((s: number, p: any) => s + p.unrealizedPnl, 0);
+        const now = new Date();
+        const isMarketCloseSoon = now.getHours() === 15 && now.getMinutes() >= 30;
+        return res.json({ positions, unrealizedPnl, isMarketCloseSoon });
+      }
+    } catch {}
+  }
+
+  // Demo / fallback positions
+  const now = new Date();
+  const isMarketCloseSoon = now.getHours() === 15 && now.getMinutes() >= 30;
+  res.json({
+    positions: [
+      { symbol: 'NIFTY26JULFUT', product: 'F&O', qty: 50, avgPrice: 24350, ltp: 24488, unrealizedPnl: 6900, side: 'BUY', exchange: 'NFO' },
+      { symbol: 'RELIANCE',      product: 'INTRADAY', qty: 10, avgPrice: 2868, ltp: 2880, unrealizedPnl: 120,  side: 'BUY', exchange: 'NSE' },
+    ],
+    unrealizedPnl: 7020,
+    isMarketCloseSoon,
+  });
+});
+
+// ── In-memory paper trade store (populated by copilot engine later) ───────────
+const paperTrades = [
+  { id: 'pt-001', symbol: 'CUPID',    side: 'BUY',  qty: 100, entryPrice: 202.00, exitPrice: 215.40, netPnl: 1340, rMultiple: 2.1, status: 'CLOSED', strategy: 'VOLATILITY_SQUEEZE', openedAt: new Date(Date.now() - 48 * 3600000).toISOString(), closedAt: new Date(Date.now() - 46 * 3600000).toISOString() },
+  { id: 'pt-002', symbol: 'ZOMATO',   side: 'SELL', qty: 200, entryPrice: 271.20, exitPrice: 264.80, netPnl: 1280, rMultiple: 1.8, status: 'CLOSED', strategy: 'RSI_MEAN_REVERSION', openedAt: new Date(Date.now() - 36 * 3600000).toISOString(), closedAt: new Date(Date.now() - 34 * 3600000).toISOString() },
+  { id: 'pt-003', symbol: 'SBIN',     side: 'BUY',  qty: 30,  entryPrice: 815.00, exitPrice: 821.80, netPnl: 204,  rMultiple: 0.9, status: 'CLOSED', strategy: 'MACD_CROSSOVER',     openedAt: new Date(Date.now() - 24 * 3600000).toISOString(), closedAt: new Date(Date.now() - 22 * 3600000).toISOString() },
+  { id: 'pt-004', symbol: 'TCS',      side: 'SELL', qty: 5,   entryPrice: 3610.0, exitPrice: 3598.5, netPnl: -57.5,rMultiple: -0.3,status: 'CLOSED', strategy: 'EMA_CROSSOVER',      openedAt: new Date(Date.now() - 12 * 3600000).toISOString(), closedAt: new Date(Date.now() - 10 * 3600000).toISOString() },
+  { id: 'pt-005', symbol: 'RELIANCE', side: 'BUY',  qty: 5,   entryPrice: 2862.5, exitPrice: null,   netPnl: 87.5, rMultiple: null, status: 'OPEN',   strategy: 'VOLATILITY_SQUEEZE', openedAt: new Date(Date.now() - 3 * 3600000).toISOString(), closedAt: undefined },
+];
+
+// ── GET /api/portfolio/paper ──────────────────────────────────────────────────
+portfolioRouter.get('/paper', (_req: Request, res: Response) => {
+  const closed = paperTrades.filter(t => t.status === 'CLOSED');
+  const wins = closed.filter(t => t.netPnl > 0).length;
+  const winRate = closed.length > 0 ? Math.round((wins / closed.length) * 100) : 0;
+  const totalPnL = paperTrades.reduce((s, t) => s + t.netPnl, 0);
+  const avgR = closed.length > 0
+    ? parseFloat((closed.reduce((s, t) => s + (t.rMultiple ?? 0), 0) / closed.length).toFixed(2))
+    : 0;
+
+  res.json({
+    trades: paperTrades,
+    summary: {
+      winRate,
+      totalPnL: parseFloat(totalPnL.toFixed(2)),
+      totalTrades: paperTrades.length,
+      avgRMultiple: avgR,
+      sharpe: 1.42, // placeholder — computed by risk engine in Phase B
+    },
+  });
+});
