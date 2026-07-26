@@ -82,18 +82,21 @@ export function CapitalVaultCard() {
   }
 
   const vault = vaultData?.vault || {
-    total_balance: 0,
-    locked_capital: 0,
-    available_capital: 0,
-    pnl_realized_lifetime: 0,
+    allocatedCapital: 0,
+    deployedCapital: 0,
+    availableCapital: 0,
+    totalPnL: 0,
+    state: 'ACTIVE',
+    mode: 'PAPER',
+    compoundMode: false,
   };
 
-  const risk = vaultData?.risk_guardian || {
+  const risk = vaultData?.risk || {
     circuit_breaker_tripped: false,
     daily_pnl: 0,
   };
 
-  const isLowCapital = vault.total_balance < 2000;
+  const isLowCapital = (vault.allocatedCapital ?? 0) < 2000;
 
   return (
     <div className="card" style={{
@@ -148,7 +151,7 @@ export function CapitalVaultCard() {
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Allotted Vault Capital</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: '#60a5fa', fontFamily: 'monospace' }}>
-            ₹{vault.total_balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            ₹{(vault.allocatedCapital ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Locked by Manager</div>
         </div>
@@ -156,7 +159,7 @@ export function CapitalVaultCard() {
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Available Free Capital</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: '#34d399', fontFamily: 'monospace' }}>
-            ₹{vault.available_capital.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            ₹{(vault.availableCapital ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Ready for next trade</div>
         </div>
@@ -164,7 +167,7 @@ export function CapitalVaultCard() {
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Active Position Capital</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: '#fbbf24', fontFamily: 'monospace' }}>
-            ₹{vault.locked_capital.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            ₹{(vault.deployedCapital ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Deployed in market</div>
         </div>
@@ -174,10 +177,10 @@ export function CapitalVaultCard() {
           <div style={{
             fontSize: 24,
             fontWeight: 800,
-            color: vault.pnl_realized_lifetime >= 0 ? '#34d399' : '#f87171',
+            color: (vault.totalPnL ?? 0) >= 0 ? '#34d399' : '#f87171',
             fontFamily: 'monospace'
           }}>
-            {vault.pnl_realized_lifetime >= 0 ? '+' : ''}₹{vault.pnl_realized_lifetime.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {(vault.totalPnL ?? 0) >= 0 ? '+' : ''}₹{(vault.totalPnL ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Auto-compounded</div>
         </div>
