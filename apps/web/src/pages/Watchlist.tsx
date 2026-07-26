@@ -181,6 +181,7 @@ export default function Watchlist() {
   // Mobile layout state
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [mobileView, setMobileView] = useState<'list' | 'chart'>('list');
+  const searchRefMobile = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -226,7 +227,9 @@ export default function Watchlist() {
   // Close search on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+      const clickInSearch = searchRef.current?.contains(e.target as Node);
+      const clickInMobileSearch = searchRefMobile.current?.contains(e.target as Node);
+      if (!clickInSearch && !clickInMobileSearch) {
         setShowSearch(false);
       }
     };
@@ -324,6 +327,53 @@ export default function Watchlist() {
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
       </div>
 
+      {/* Global Mobile Search Bar (Only visible on mobile, always active) */}
+      {isMobile && (
+        <div ref={searchRefMobile} style={{ position: 'relative', marginBottom: 12 }}>
+          <input
+            value={searchQ}
+            onChange={e => { setSearchQ(e.target.value); setShowSearch(true); }}
+            onFocus={() => setShowSearch(true)}
+            placeholder="🔍  Search & open chart..."
+            style={{ width: '100%', padding: '12px 16px', fontSize: 14, borderRadius: 10 }}
+          />
+          {showSearch && searchResults.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '110%', left: 0, right: 0,
+              background: '#111827', border: '1px solid rgba(99,102,241,0.3)',
+              borderRadius: 10, zIndex: 100, overflow: 'hidden',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            }}>
+              {searchResults.map(r => (
+                <div
+                  key={r.symbol}
+                  onClick={() => {
+                    handleAddStock(r.symbol, r.exchange);
+                    setMobileView('chart'); // Auto open chart on search select
+                  }}
+                  style={{
+                    padding: '10px 14px', cursor: 'pointer', display: 'flex',
+                    justifyContent: 'space-between', alignItems: 'center',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{r.symbol}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.name}</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4 }}>
+                    {r.exchange} +
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Mobile Segmented View Switcher (Only visible on mobile) */}
       {isMobile && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -394,47 +444,49 @@ export default function Watchlist() {
               {lists.length > 1 && <button onClick={() => handleDeleteList(activeListId)} className="secondary" style={{ fontSize: 11, padding: '5px 10px', color: '#f87171' }}>🗑</button>}
             </div>
 
-            {/* Search Bar */}
-            <div ref={searchRef} style={{ position: 'relative' }}>
-              <input
-                value={searchQ}
-                onChange={e => { setSearchQ(e.target.value); setShowSearch(true); }}
-                onFocus={() => setShowSearch(true)}
-                placeholder="🔍  Search by name or symbol..."
-                style={{ width: '100%', padding: '10px 14px', fontSize: 13 }}
-              />
-              {showSearch && searchResults.length > 0 && (
-                <div style={{
-                  position: 'absolute', top: '110%', left: 0, right: 0,
-                  background: '#111827', border: '1px solid rgba(99,102,241,0.3)',
-                  borderRadius: 10, zIndex: 100, overflow: 'hidden',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                }}>
-                  {searchResults.map(r => (
-                    <div
-                      key={r.symbol}
-                      onClick={() => handleAddStock(r.symbol, r.exchange)}
-                      style={{
-                        padding: '10px 14px', cursor: 'pointer', display: 'flex',
-                        justifyContent: 'space-between', alignItems: 'center',
-                        borderBottom: '1px solid rgba(255,255,255,0.04)',
-                        transition: 'background 0.1s',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{r.symbol}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.name}</div>
+            {/* Search Bar (Only desktop) */}
+            {!isMobile && (
+              <div ref={searchRef} style={{ position: 'relative' }}>
+                <input
+                  value={searchQ}
+                  onChange={e => { setSearchQ(e.target.value); setShowSearch(true); }}
+                  onFocus={() => setShowSearch(true)}
+                  placeholder="🔍  Search by name or symbol..."
+                  style={{ width: '100%', padding: '10px 14px', fontSize: 13 }}
+                />
+                {showSearch && searchResults.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '110%', left: 0, right: 0,
+                    background: '#111827', border: '1px solid rgba(99,102,241,0.3)',
+                    borderRadius: 10, zIndex: 100, overflow: 'hidden',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                  }}>
+                    {searchResults.map(r => (
+                      <div
+                        key={r.symbol}
+                        onClick={() => handleAddStock(r.symbol, r.exchange)}
+                        style={{
+                          padding: '10px 14px', cursor: 'pointer', display: 'flex',
+                          justifyContent: 'space-between', alignItems: 'center',
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#fff' }}>{r.symbol}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.name}</div>
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4 }}>
+                          {r.exchange} +
+                        </span>
                       </div>
-                      <span style={{ fontSize: 10, color: 'var(--muted)', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 4 }}>
-                        {r.exchange} +
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Column Headers */}
             <div style={{

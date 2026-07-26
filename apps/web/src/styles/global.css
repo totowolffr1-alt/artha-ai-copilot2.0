@@ -582,6 +582,7 @@ tr:hover td {
   
   .ai-chat-layout > .card {
     height: 480px !important; /* reduce height on mobile to save scroll */
+    flex: none !important;
   }
 
   .ai-chat-layout > div:last-child {
