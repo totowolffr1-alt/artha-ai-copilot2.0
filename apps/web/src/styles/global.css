@@ -347,3 +347,234 @@ tr:hover td {
   font-weight: 700;
   color: #ffffff;
 }
+
+/* ── Mobile Bottom Tab Bar ──────────────────────────────────────────────────── */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 62px;
+  background: rgba(9, 12, 16, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(99, 102, 241, 0.2);
+  z-index: 1000;
+  padding: 0 4px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-bottom-nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-decoration: none;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 8px 4px;
+  transition: color 0.2s ease;
+  border-radius: 8px;
+  margin: 4px 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-bottom-nav a .tab-icon {
+  font-size: 21px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.mobile-bottom-nav a.active {
+  color: #a78bfa;
+}
+
+.mobile-bottom-nav a.active .tab-icon {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.7));
+}
+
+/* ── Mobile Top Header ─────────────────────────────────────────────────────── */
+.mobile-header {
+  display: none;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: rgba(9, 12, 16, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  z-index: 999;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-header-logo {
+  font-size: 17px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.3px;
+}
+
+/* ── Tablet: Slim icon-only sidebar (769–1024px) ───────────────────────────── */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .sidebar {
+    width: 72px;
+    padding: 20px 8px;
+  }
+
+  .sidebar h1 {
+    display: none;
+  }
+
+  .sidebar nav a {
+    justify-content: center;
+    padding: 13px 8px;
+    font-size: 0px; /* hide text */
+  }
+
+  /* Show only emoji by removing text via clip */
+  .sidebar nav a::first-letter {
+    font-size: 20px;
+  }
+
+  .main {
+    padding: 24px 20px;
+  }
+}
+
+/* ── Mobile: Full responsive layout (≤ 768px) ──────────────────────────────── */
+@media (max-width: 768px) {
+  html {
+    font-size: 15px;
+  }
+
+  /* Stack layout vertically */
+  .app-shell {
+    flex-direction: column;
+  }
+
+  /* Hide desktop sidebar */
+  .sidebar {
+    display: none !important;
+  }
+
+  /* Show mobile UI elements */
+  .mobile-header {
+    display: flex !important;
+  }
+
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+
+  /* Main content: full width, space for header + bottom nav */
+  .main {
+    padding: 16px 14px 80px 14px;
+    max-width: 100%;
+    width: 100%;
+    overflow-y: auto;
+  }
+
+  /* Cards: lighter on mobile */
+  .card {
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+
+  /* Disable hover lift on touch devices */
+  .card:hover {
+    transform: none;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Grid: single column */
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  /* Headings */
+  h2 {
+    font-size: 20px;
+    margin-bottom: 14px;
+  }
+
+  /* Stat values */
+  .stat-value {
+    font-size: 20px;
+  }
+
+  /* Tables: horizontal scroll */
+  .card table,
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  th, td {
+    padding: 11px 12px;
+    font-size: 13px;
+  }
+
+  /* Inputs: 16px prevents iOS zoom-in */
+  input, select, textarea {
+    font-size: 16px !important;
+    width: 100%;
+  }
+
+  /* Alert banner: stack */
+  .alert-banner {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 14px 16px;
+  }
+
+  /* Buttons: full width in forms */
+  .btn-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Reduce animations for performance */
+  * {
+    animation-duration: 0.15s !important;
+    transition-duration: 0.15s !important;
+  }
+}
+
+/* ── iPhone notch / safe area support ──────────────────────────────────────── */
+@supports (padding: max(0px)) {
+  @media (max-width: 768px) {
+    .mobile-bottom-nav {
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+      height: calc(62px + env(safe-area-inset-bottom));
+    }
+
+    .main {
+      padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+
+    .mobile-header {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+  }
+}
+

@@ -9,6 +9,7 @@ import NewsIntelligence from './pages/NewsIntelligence';
 import SystemHealth from './pages/SystemHealth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+// Desktop sidebar nav
 const NAV = [
   { to: '/',            label: '📊 Dashboard' },
   { to: '/watchlist',   label: '📈 Watchlist' },
@@ -19,11 +20,20 @@ const NAV = [
   { to: '/system',      label: '⚙️ System Health' },
 ];
 
+// Mobile bottom tab bar — 5 primary items
+const MOBILE_TABS = [
+  { to: '/',          icon: '📊', label: 'Home'      },
+  { to: '/watchlist', icon: '📈', label: 'Watchlist' },
+  { to: '/portfolio', icon: '💼', label: 'Portfolio' },
+  { to: '/ai-chat',   icon: '🤖', label: 'AI'        },
+  { to: '/system',    icon: '⚙️', label: 'System'   },
+];
+
 function wrap(element: React.ReactElement) {
   return <ErrorBoundary>{element}</ErrorBoundary>;
 }
 
-/** Notification bell in sidebar header */
+/** Notification bell — used in both header variants */
 function NotificationBell() {
   const [unread, setUnread] = useState(0);
 
@@ -63,6 +73,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="app-shell">
+
+        {/* ── Mobile top header (hidden on desktop via CSS) ── */}
+        <header className="mobile-header">
+          <span className="mobile-header-logo">⚡ Artha AI</span>
+          <NotificationBell />
+        </header>
+
+        {/* ── Desktop / tablet sidebar ── */}
         <aside className="sidebar">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', marginBottom: 4 }}>
             <h1 style={{ margin: 0 }}>Artha AI</h1>
@@ -81,6 +99,8 @@ export default function App() {
             ))}
           </nav>
         </aside>
+
+        {/* ── Main content area ── */}
         <main className="main">
           <Routes>
             <Route path="/"            element={wrap(<Dashboard />)} />
@@ -92,6 +112,22 @@ export default function App() {
             <Route path="/system"      element={wrap(<SystemHealth />)} />
           </Routes>
         </main>
+
+        {/* ── Mobile bottom tab bar (hidden on desktop via CSS) ── */}
+        <nav className="mobile-bottom-nav">
+          {MOBILE_TABS.map(tab => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              end={tab.to === '/'}
+              className={({ isActive }) => isActive ? 'active' : ''}
+            >
+              <span className="tab-icon">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
       </div>
     </BrowserRouter>
   );
