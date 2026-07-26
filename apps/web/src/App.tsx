@@ -29,7 +29,7 @@ const MOBILE_TABS = [
   { to: '/watchlist', icon: '📈', label: 'Watchlist' },
   { to: '/portfolio', icon: '💼', label: 'Portfolio' },
   { to: '/trade',     icon: '⚡',  label: 'Trade'     },
-  { to: '/system',    icon: '⚙️', label: 'System'   },
+  { to: '/ai-chat',   icon: '🤖', label: 'AI'        },
 ];
 
 function wrap(element: React.ReactElement) {
