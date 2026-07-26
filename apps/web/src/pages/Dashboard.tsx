@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder, getCopilotTrades } from '../services/api';
+import { subscribeTicks, getWatchlist, Tick, subscribeSignals, Signal, placeOrder, getCopilotTrades, getServerIp } from '../services/api';
 import { getMarketSession } from '../services/marketSession';
 import { CapitalVaultCard } from '../components/CapitalVaultCard';
 import { RiskDashboard } from '../components/RiskDashboard';
@@ -55,6 +55,8 @@ export default function Dashboard() {
   const [vix] = useState(14.5);
   const [drawdown] = useState(-0.04);
   const [killSwitchActive] = useState(false);
+  const [serverIp, setServerIp] = useState('Fetching…');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copilotData, setCopilotData] = useState<{ trades: any[]; summary: any }>({
     trades: [],
     summary: { totalPnL: 0, openTrades: 0, todayTrades: 0, winRate: 0 },
@@ -63,6 +65,7 @@ export default function Dashboard() {
   // Poll copilot trades every 5 seconds
   useEffect(() => {
     getCopilotTrades().then(setCopilotData);
+    getServerIp().then(setServerIp);
     const id = setInterval(() => getCopilotTrades().then(setCopilotData), 5000);
     return () => clearInterval(id);
   }, []);
@@ -327,8 +330,35 @@ export default function Dashboard() {
                   <div>Confidence: <strong style={{ color: '#a78bfa' }}>{(sig.confidence * 100).toFixed(0)}%</strong></div>
                 </div>
                 {executionResult[sig.signal_id] ? (
-                  <div style={{ fontSize: 12, fontWeight: 600, color: executionResult[sig.signal_id].startsWith('FILLED') ? '#10b981' : '#ef4444' }}>
-                    {executionResult[sig.signal_id]}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: executionResult[sig.signal_id].startsWith('FILLED') ? '#10b981' : '#ef4444', marginBottom: 6 }}>
+                      {executionResult[sig.signal_id]}
+                    </div>
+                    {executionResult[sig.signal_id].toLowerCase().includes('not a registered ip') && (
+                      <div style={{
+                        display: 'flex', gap: 6, alignItems: 'center', marginTop: 4,
+                        background: 'rgba(245,158,11,0.07)', padding: '6px 8px', borderRadius: 6,
+                        border: '1px solid rgba(245,158,11,0.2)'
+                      }}>
+                        <code style={{ fontSize: 10, fontFamily: 'monospace', color: '#fbbf24', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          IP: {serverIp}
+                        </code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(serverIp);
+                            setCopiedId(sig.signal_id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          style={{
+                            padding: '3px 8px', fontSize: 10, borderRadius: 4, border: 'none',
+                            background: copiedId === sig.signal_id ? '#059669' : '#4f46e5',
+                            color: '#fff', fontWeight: 600, cursor: 'pointer'
+                          }}
+                        >
+                          {copiedId === sig.signal_id ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <button
