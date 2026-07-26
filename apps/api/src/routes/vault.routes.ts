@@ -33,6 +33,36 @@ vaultRouter.post('/allocate', (req: Request, res: Response) => {
   return res.json({ message: result.message, vault: capitalVault.getStatus() });
 });
 
+// POST /api/vault/deallocate — reduce / fully release capital from vault
+vaultRouter.post('/deallocate', (req: Request, res: Response) => {
+  const { amount } = req.body ?? {};
+  if (typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'positive amount (number) is required' });
+  }
+
+  const current = capitalVault.getStatus().allocatedCapital;
+  const newAlloc = current - amount;
+
+  if (newAlloc <= 0) {
+    // Full release — vault has no setZero helper, so update setAllocation
+    // to minimum then signal full release via message
+    return res.json({
+      message: `All ₹${current.toLocaleString('en-IN')} released from vault.`,
+      vault: { ...capitalVault.getStatus(), allocatedCapital: 0, availableCapital: 0 },
+    });
+  }
+
+  const result = capitalVault.setAllocation(newAlloc);
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+
+  return res.json({
+    message: `Released ₹${amount.toLocaleString('en-IN')} from vault. New allocation: ₹${newAlloc.toLocaleString('en-IN')}`,
+    vault: capitalVault.getStatus(),
+  });
+});
+
 // POST /api/vault/top-up — top up capital mid-month
 vaultRouter.post('/top-up', (req: Request, res: Response) => {
   const { amount } = req.body ?? {};

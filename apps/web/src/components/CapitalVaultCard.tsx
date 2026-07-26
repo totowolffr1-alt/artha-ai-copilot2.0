@@ -11,7 +11,7 @@ export function CapitalVaultCard() {
   const fetchVault = async () => {
     try {
       const data = await getVaultStatus();
-      if (data && data.success) {
+      if (data && data.vault) {
         setVaultData(data);
       }
     } catch (err) {
@@ -37,8 +37,8 @@ export function CapitalVaultCard() {
     setActionMessage(null);
     try {
       const res = await allocateCapital(val);
-      if (res.success) {
-        setActionMessage({ text: `✅ Successfully allotted ₹${val.toLocaleString('en-IN')} to Copilot Vault!`, type: 'success' });
+      if (res.message || res.vault) {
+        setActionMessage({ text: `✅ ${res.message || `Successfully allotted ₹${val.toLocaleString('en-IN')}!`}`, type: 'success' });
         fetchVault();
       } else {
         setActionMessage({ text: `❌ ${res.error || 'Allocation failed'}`, type: 'error' });
@@ -60,8 +60,8 @@ export function CapitalVaultCard() {
     setActionMessage(null);
     try {
       const res = await deallocateCapital(val);
-      if (res.success) {
-        setActionMessage({ text: `✅ Released ₹${val.toLocaleString('en-IN')} from Copilot Vault back to main balance.`, type: 'success' });
+      if (res.message || res.vault) {
+        setActionMessage({ text: `✅ ${res.message || `Released ₹${val.toLocaleString('en-IN')} from Vault`}`, type: 'success' });
         fetchVault();
       } else {
         setActionMessage({ text: `❌ ${res.error || 'Deallocation failed'}`, type: 'error' });
