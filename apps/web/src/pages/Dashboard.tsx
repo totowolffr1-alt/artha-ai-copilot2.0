@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [signals, setSignals] = useState<Signal[]>(INITIAL_SIGNALS);
   const [executingSignalId, setExecutingSignalId] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<Record<string, string>>({});
+  const [confirmingSignal, setConfirmingSignal] = useState<Signal | null>(null);
   
   const [regime] = useState('STRONG_BULL');
   const [vix] = useState(14.5);
@@ -362,7 +363,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => handleExecuteOrder(sig)}
+                    onClick={() => setConfirmingSignal(sig)}
                     disabled={executingSignalId === sig.signal_id}
                     style={{ width: '100%', padding: '8px 0', fontSize: 12 }}
                   >
@@ -419,6 +420,69 @@ export default function Dashboard() {
 
       {/* 📋 Order Book */}
       <OrderBook />
+
+      {/* ── Signal Execution Confirmation Dialog ──────────────────────── */}
+      {confirmingSignal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000, display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', padding: 16,
+        }}>
+          <div style={{
+            background: '#0f172a', border: '1px solid rgba(99,102,241,0.4)',
+            borderRadius: 18, padding: 28, maxWidth: 380, width: '100%',
+            boxShadow: '0 16px 60px rgba(0,0,0,0.7)',
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', marginBottom: 6 }}>
+              Confirm Signal Execution
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+              This will execute a real trade on your Angel One account.
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 14, marginBottom: 20 }}>
+              {[
+                ['Stock', confirmingSignal.symbol],
+                ['Side', confirmingSignal.direction === 'LONG' ? 'BUY' : 'SELL'],
+                ['Qty', '10 shares'], // default execution quantity
+                ['Price', `₹${confirmingSignal.entry_price}`],
+                ['Strategy', confirmingSignal.strategy],
+              ].map(([k, v]) => (
+                <>
+                  <span key={`k-${k}`} style={{ color: 'var(--muted)' }}>{k}</span>
+                  <span key={`v-${k}`} style={{
+                    fontWeight: 700, fontFamily: 'monospace',
+                    color: k === 'Side' ? (confirmingSignal.direction === 'LONG' ? '#34d399' : '#f87171') : '#e0e7ff',
+                  }}>{v}</span>
+                </>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmingSignal(null)} style={{
+                flex: 1, padding: '12px 0', borderRadius: 10,
+                border: '1px solid rgba(255,255,255,0.12)', background: 'transparent',
+                color: 'var(--muted)', cursor: 'pointer', fontSize: 14,
+              }}>Cancel</button>
+              <button
+                onClick={() => {
+                  const sig = confirmingSignal;
+                  setConfirmingSignal(null);
+                  handleExecuteOrder(sig);
+                }}
+                style={{
+                  flex: 2, padding: '12px 0', borderRadius: 10, border: 'none',
+                  background: confirmingSignal.direction === 'LONG' ? 'linear-gradient(90deg,#059669,#10b981)' : 'linear-gradient(90deg,#dc2626,#ef4444)',
+                  color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                  boxShadow: confirmingSignal.direction === 'LONG' ? '0 4px 16px rgba(16,185,129,0.3)' : '0 4px 16px rgba(239,68,68,0.3)',
+                }}
+              >
+                ✅ Confirm {confirmingSignal.direction === 'LONG' ? 'BUY' : 'SELL'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

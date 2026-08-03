@@ -21,6 +21,7 @@ import { MockMarketDataAdapter } from '../../../../packages/phase2-market-data/s
 import { getWatchlistSymbols } from '../routes/watchlist.routes';
 import { getCachedHoldings, getJwtToken } from './brokerSession';
 import { pushNotification } from './notificationService';
+import { updateLastTick } from './healthMonitor';
 import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/SignalEngine';
 import { TradeJournalService } from './tradeJournalService';
 import { executeSignal, onTradeExit } from './orderExecutionService';
@@ -69,6 +70,7 @@ export function getActiveSymbols(): string[] {
 // ── Tick Processor ────────────────────────────────────────────────────────────
 export function handleIncomingTick(symbol: string, price: number, volume: number) {
   lastTickReceivedAt = Date.now();
+  updateLastTick();
 
   // 1. Tick SL/TP monitor for active trades in TradeJournal
   const openTrades = TradeJournalService.getJournal(100, 'OPEN');

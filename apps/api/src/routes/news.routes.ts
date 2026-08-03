@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
+import { updateLastNewsFetch } from '../services/healthMonitor';
 
 export const newsRouter = Router();
 
@@ -83,10 +84,7 @@ function extractSymbol(title: string): string | null {
   return null;
 }
 
-// ── News route ────────────────────────────────────────────────────────────────
-newsRouter.get('/', async (req: Request, res: Response) => {
-  const symbolFilter = req.query.symbol as string | undefined;
-
+export async function refreshNewsFeed() {
   const feeds = await Promise.all([
     fetchRSS('https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms', 'Economic Times'),
     fetchRSS('https://www.moneycontrol.com/rss/buzzingstocks.xml', 'MoneyControl'),
@@ -110,6 +108,18 @@ newsRouter.get('/', async (req: Request, res: Response) => {
         impact: confidence > 75 ? 'HIGH' : confidence > 60 ? 'MEDIUM' : 'LOW',
       };
     });
+  }
+  updateLastNewsFetch();
+}
+
+// ── News route ────────────────────────────────────────────────────────────────
+newsRouter.get('/', async (req: Request, res: Response) => {
+  const symbolFilter = req.query.symbol as string | undefined;
+
+  try {
+    await refreshNewsFeed();
+  } catch (err) {
+    console.error('[News] Refresh failed during request:', err);
   }
 
   const items = newsCache.filter(item => !symbolFilter || item.symbol === symbolFilter);

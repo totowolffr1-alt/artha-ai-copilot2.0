@@ -96,6 +96,18 @@ export function startScheduler() {
     }
   });
   jobs.push({ name: 'FII/DII Data Fetch', schedule: '0 13 * * 1-5', task: fiiDii });
+
+  // Background news refresh every 15 minutes to keep news health score green
+  const newsRefreshJob = cron.schedule('*/15 * * * *', async () => {
+    console.log('[schedulerService] Fetching background news feed');
+    try {
+      const { refreshNewsFeed } = await import('../routes/news.routes');
+      await refreshNewsFeed();
+    } catch (e: any) {
+      console.error('[schedulerService] Background news refresh failed:', e.message);
+    }
+  });
+  jobs.push({ name: 'News Feed Refresh', schedule: '*/15 * * * *', task: newsRefreshJob });
 }
 
 export function getSchedulerStatus() {
