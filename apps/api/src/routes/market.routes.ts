@@ -329,6 +329,38 @@ marketRouter.get('/quotes', async (req: Request, res: Response) => {
   }
 });
 
+// ── Single-symbol live price (direct Yahoo Finance, no WebSocket needed) ────
+marketRouter.get('/live-price', async (req: Request, res: Response) => {
+  const symbol = String(req.query.symbol || 'RELIANCE');
+  const exchange = String(req.query.exchange || 'NSE');
+  const suffix = exchange === 'BSE' ? '.BO' : '.NS';
+  const ticker = `${symbol}${suffix}`;
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const json = await r.json() as any;
+    const meta  = json?.chart?.result?.[0]?.meta;
+    if (!meta) throw new Error('No meta');
+    return res.json({
+      symbol,
+      exchange,
+      price:         meta.regularMarketPrice || meta.previousClose,
+      high:          meta.regularMarketDayHigh,
+      low:           meta.regularMarketDayLow,
+      open:          meta.chartPreviousClose,
+      previousClose: meta.chartPreviousClose,
+      volume:        meta.regularMarketVolume,
+      timestamp:     new Date().toISOString(),
+    });
+  } catch (err: any) {
+    // fallback: return from latestTicks if available
+    const tick = latestTicks.get(symbol);
+    if (tick) return res.json({ ...tick, timestamp: new Date().toISOString() });
+    return res.status(502).json({ error: err.message });
+  }
+});
+
+
 marketRouter.get('/ticks', (_req: Request, res: Response) => {
   const session = getMarketSession();
   const ticks = Array.from(latestTicks.values()).map(t => ({

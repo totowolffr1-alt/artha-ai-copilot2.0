@@ -202,7 +202,7 @@ function startFallbackPolling() {
   });
 
   pollYahooFinancePrices();
-  fallbackInterval = setInterval(pollYahooFinancePrices, 30000);
+  fallbackInterval = setInterval(pollYahooFinancePrices, 5000); // Poll every 5s for near-live prices
 }
 
 function stopFallbackPolling() {

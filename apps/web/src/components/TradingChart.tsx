@@ -346,6 +346,36 @@ export default function TradingChart({ symbol, onClose, fullscreen = false }: Pr
     return () => unsubscribe();
   }, [symbol, timeframe]);
 
+  // ── REST polling fallback — guarantees live price even without WebSocket ──
+  useEffect(() => {
+    const BASE = (import.meta as any).env?.VITE_API_URL || '/api';
+    const poll = async () => {
+      try {
+        const r = await fetch(`${BASE}/market/live-price?symbol=${symbol}&exchange=NSE`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.price || !candleSeriesRef.current || !lastCandleRef.current) return;
+
+        const price = d.price;
+        const now   = Math.floor(Date.now() / 60_000) * 60 as Time; // 1-min aligned
+        const prev  = lastCandleRef.current;
+
+        const updated = now === prev.time
+          ? { time: now, open: prev.open, high: Math.max(prev.high, price), low: Math.min(prev.low, price), close: price }
+          : { time: now, open: price, high: price, low: price, close: price };
+
+        lastCandleRef.current = updated;
+        try { candleSeriesRef.current.update(updated); } catch {}
+
+        setOhlcv(o => ({ ...o, c: price, h: Math.max(o.h, price), l: Math.min(o.l, price) }));
+      } catch { /* network error — silently skip */ }
+    };
+
+    poll(); // immediate first call
+    const id = setInterval(poll, 5000); // every 5 seconds
+    return () => clearInterval(id);
+  }, [symbol]);
+
   const changeColor = ohlcv.c >= ohlcv.o ? '#10b981' : '#ef4444';
   const isPeriodPositive = periodStats.pnl >= 0;
 
