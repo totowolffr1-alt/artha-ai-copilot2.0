@@ -12,6 +12,8 @@ import {
   type Time,
 } from 'lightweight-charts';
 
+import { subscribeTicks, type Tick } from '../services/api';
+
 const BASE_URL = '/api';
 
 const TIMEFRAMES = ['1m','5m','15m','30m','1h','4h','D','W','M','1Y','5Y'] as const;
@@ -84,6 +86,7 @@ export default function TradingChart({ symbol, onClose, fullscreen = false }: Pr
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const lineSeriesRefs = useRef<ISeriesApi<'Line'>[]>([]);
+  const lastCandleRef = useRef<any>(null);
 
   const [timeframe, setTimeframe] = useState<Timeframe>('D');
   const [activeIndicators, setActiveIndicators] = useState<Set<Indicator>>(new Set(['EMA20', 'EMA50']));
@@ -146,6 +149,11 @@ export default function TradingChart({ symbol, onClose, fullscreen = false }: Pr
 
       candleSeriesRef.current?.setData(candleData);
       volumeSeriesRef.current?.setData(volData);
+
+      // Store last candle for live tick updates
+      if (candleData.length > 0) {
+        lastCandleRef.current = { ...candleData[candleData.length - 1] };
+      }
 
       // Indicator overlays
       const addLine = (values: (number | null)[], color: string, lineWidth: number = 1) => {
@@ -274,6 +282,69 @@ export default function TradingChart({ symbol, onClose, fullscreen = false }: Pr
   }, [isFullscreen]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Live tick subscription — updates current candle bar in real-time ──────
+  useEffect(() => {
+    const getAlignedTime = (timestamp: string, tf: string): number => {
+      const ms = new Date(timestamp).getTime();
+      if (tf === '1m')  return Math.floor(ms / 60_000)    * 60;
+      if (tf === '5m')  return Math.floor(ms / 300_000)   * 300;
+      if (tf === '15m') return Math.floor(ms / 900_000)   * 900;
+      if (tf === '30m') return Math.floor(ms / 1_800_000) * 1_800;
+      if (tf === '1h')  return Math.floor(ms / 3_600_000) * 3_600;
+      if (tf === '4h')  return Math.floor(ms / 14_400_000)* 14_400;
+      // Daily+: align to start of day (UTC midnight)
+      const d = new Date(ms); d.setUTCHours(0, 0, 0, 0);
+      return Math.floor(d.getTime() / 1000);
+    };
+
+    const unsubscribe = subscribeTicks((tick: Tick) => {
+      if (tick.symbol !== symbol) return;
+      if (!candleSeriesRef.current || !lastCandleRef.current) return;
+
+      const alignedTime = getAlignedTime(tick.timestamp || new Date().toISOString(), timeframe) as Time;
+      const prev = lastCandleRef.current;
+      let updated: any;
+
+      if (alignedTime === prev.time) {
+        // Update existing bar
+        updated = {
+          time:  alignedTime,
+          open:  prev.open,
+          high:  Math.max(prev.high, tick.price),
+          low:   Math.min(prev.low,  tick.price),
+          close: tick.price,
+        };
+      } else if ((alignedTime as number) > (prev.time as number)) {
+        // New bar started
+        updated = { time: alignedTime, open: tick.price, high: tick.price, low: tick.price, close: tick.price };
+      } else {
+        return; // stale tick — ignore
+      }
+
+      lastCandleRef.current = updated;
+
+      try { candleSeriesRef.current.update(updated); } catch {}
+      try {
+        volumeSeriesRef.current?.update({
+          time:  alignedTime,
+          value: (tick as any).volume || 10,
+          color: updated.close >= updated.open ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
+        });
+      } catch {}
+
+      setOhlcv(prev => ({
+        o: updated.open,
+        h: updated.high,
+        l: updated.low,
+        c: updated.close,
+        v: (tick as any).volume || prev.v,
+        t: formatChartTime(alignedTime),
+      }));
+    });
+
+    return () => unsubscribe();
+  }, [symbol, timeframe]);
 
   const changeColor = ohlcv.c >= ohlcv.o ? '#10b981' : '#ef4444';
   const isPeriodPositive = periodStats.pnl >= 0;

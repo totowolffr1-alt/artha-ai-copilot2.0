@@ -250,6 +250,85 @@ marketRouter.get('/watchlist', (_req: Request, res: Response) => {
   });
 });
 
+const BASE_PRICES: Record<string, number> = {
+  RELIANCE: 2880, TCS: 3600, INFY: 1590, HDFCBANK: 1330, ICICIBANK: 1240,
+  WIPRO: 540, TATAMOTORS: 960, SBIN: 820, BAJFINANCE: 7200, ZOMATO: 265,
+  PAYTM: 880, CUPID: 215, KPITTECH: 1680, BANDHANBNK: 210, IRCTC: 880,
+  ADANIPORTS: 1340, SUNPHARMA: 1720, ASIANPAINT: 2450, TITAN: 3300,
+};
+
+marketRouter.get('/quotes', async (req: Request, res: Response) => {
+  const symbolsQuery = String(req.query.symbols || '');
+  if (!symbolsQuery) return res.json({ quotes: [] });
+
+  const symbols = symbolsQuery.split(',');
+  const results = [];
+
+  try {
+    const tickers = symbols.map(s => s.toUpperCase().trim().includes('.') ? s.toUpperCase().trim() : `${s.toUpperCase().trim()}.NS`);
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers.join(',')}`;
+
+    const { data } = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 5000
+    });
+
+    const yahooQuotes = data?.quoteResponse?.result || [];
+
+    for (const symbol of symbols) {
+      const upper = symbol.toUpperCase().trim();
+      const ticker = upper.includes('.') ? upper : `${upper}.NS`;
+      const q = yahooQuotes.find((y: any) => y.symbol === ticker);
+
+      if (q) {
+        results.push({
+          symbol: upper,
+          ltp: q.regularMarketPrice || 0,
+          open: q.regularMarketOpen || 0,
+          high: q.regularMarketDayHigh || 0,
+          low: q.regularMarketDayLow || 0,
+          prevClose: q.regularMarketPreviousClose || 0,
+          change: q.regularMarketChange || 0,
+          changePct: q.regularMarketChangePercent || 0,
+          volume: q.regularMarketVolume || 0,
+        });
+      } else {
+        const base = BASE_PRICES[upper] || 200;
+        results.push({
+          symbol: upper,
+          ltp: base,
+          open: base,
+          high: base,
+          low: base,
+          prevClose: base,
+          change: 0,
+          changePct: 0,
+          volume: 10000,
+        });
+      }
+    }
+
+    return res.json({ quotes: results });
+  } catch (err: any) {
+    const fallbackQuotes = symbols.map(s => {
+      const upper = s.toUpperCase().trim();
+      const base = BASE_PRICES[upper] || 200;
+      return {
+        symbol: upper,
+        ltp: base,
+        open: base,
+        high: base,
+        low: base,
+        prevClose: base,
+        change: 0,
+        changePct: 0,
+        volume: 10000,
+      };
+    });
+    return res.json({ quotes: fallbackQuotes, error: err.message });
+  }
+});
+
 marketRouter.get('/ticks', (_req: Request, res: Response) => {
   const session = getMarketSession();
   const ticks = Array.from(latestTicks.values()).map(t => ({

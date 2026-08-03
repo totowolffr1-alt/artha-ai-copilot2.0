@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import TradingChart from '../components/TradingChart';
 import { watchlistStore, type Watchlist, type WatchlistStock } from '../services/watchlistStore';
 import { getMarketSession } from '../services/marketSession';
+import { subscribeTicks, type Tick } from '../services/api';
 
 const BASE = '/api';
 
@@ -198,18 +199,61 @@ export default function Watchlist() {
     setLists([...watchlistStore.getAll()]);
   };
 
-  // Mock quote refresh
+  // Load real quotes from backend & update via live ticks stream
   useEffect(() => {
-    const update = () => {
-      const all = watchlistStore.getAllSymbols();
-      const q: Record<string, Quote> = {};
-      all.forEach(sym => { q[sym] = getMockQuote(sym); });
-      setQuotes(q);
+    const fetchRealQuotes = async () => {
+      const allSymbols = watchlistStore.getAllSymbols();
+      if (allSymbols.length === 0) return;
+      try {
+        const res = await fetch(`${BASE}/market/quotes?symbols=${allSymbols.join(',')}`);
+        const data = await res.json();
+        if (data.quotes) {
+          const newQuotes: Record<string, Quote> = {};
+          data.quotes.forEach((q: Quote) => {
+            newQuotes[q.symbol] = q;
+          });
+          setQuotes(prev => ({ ...prev, ...newQuotes }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch real quotes:', err);
+      }
     };
-    update();
-    const id = session.isOpen ? setInterval(update, 3000) : undefined;
-    return () => { if (id) clearInterval(id); };
-  }, [session.isOpen]);
+
+    fetchRealQuotes();
+
+    let intervalId: NodeJS.Timeout | undefined;
+    if (session.isOpen) {
+      intervalId = setInterval(fetchRealQuotes, 10000);
+    }
+
+    const unsubscribeTicks = subscribeTicks((tick: Tick) => {
+      setQuotes(prev => {
+        const existing = prev[tick.symbol];
+        if (!existing) return prev;
+
+        const updatedLtp = tick.price;
+        const diff = updatedLtp - existing.prevClose;
+        const changePct = existing.prevClose > 0 ? (diff / existing.prevClose) * 100 : 0;
+
+        return {
+          ...prev,
+          [tick.symbol]: {
+            ...existing,
+            ltp: updatedLtp,
+            high: Math.max(existing.high, updatedLtp),
+            low: Math.min(existing.low, updatedLtp),
+            change: diff,
+            changePct: changePct,
+          }
+        };
+      });
+    });
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      unsubscribeTicks();
+    };
+  }, [lists, session.isOpen]);
 
   // Search
   useEffect(() => {
