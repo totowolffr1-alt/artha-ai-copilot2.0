@@ -12,6 +12,7 @@ import { tradingRouter } from './routes/trading.routes';
 import { newsRouter } from './routes/news.routes';
 import { signalsRouter } from './routes/signals.routes';
 import { watchlistRouter } from './routes/watchlist.routes';
+import { analysisRouter } from './routes/analysis.routes';
 
 // Shared broker session — single login for entire server lifecycle
 import { getJwtToken } from './services/brokerSession';
@@ -46,6 +47,7 @@ async function main() {
   app.use('/api/journal',   journalRouter);
   app.use('/api/vault',     vaultRouter);
   app.use('/api/orders',    ordersRouter);
+  app.use('/api/analysis',  analysisRouter);
 
   app.get('/api/health', (_req, res) => {
     res.json({

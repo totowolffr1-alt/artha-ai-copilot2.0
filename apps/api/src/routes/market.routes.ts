@@ -7,7 +7,7 @@ export const marketRouter = Router();
 
 let sharedBus: IEventBus | null = null;
 let sharedAdapter: MockMarketDataAdapter | null = null;
-const latestTicks = new Map<string, { symbol: string; exchange: string; price: number; timestamp: string }>();
+export const latestTicks = new Map<string, { symbol: string; exchange: string; price: number; timestamp: string }>();
 
 export function attachMarketData(bus: IEventBus, adapter: MockMarketDataAdapter) {
   sharedBus = bus;
@@ -102,7 +102,7 @@ function generateFallbackCandles(symbol: string, range: string, basePrice: numbe
   return candles;
 }
 
-async function fetchYahooFinance(symbol: string, range: string, interval: string) {
+export async function fetchYahooFinance(symbol: string, range: string, interval: string) {
   const upper = symbol.toUpperCase().trim();
   const ticker = upper.includes('.') ? upper : `${upper}.NS`;
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;

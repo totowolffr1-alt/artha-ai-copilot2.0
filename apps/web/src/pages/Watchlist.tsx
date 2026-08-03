@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import TradingChart from '../components/TradingChart';
+import ConfidenceCard from '../components/ConfidenceCard';
 import { watchlistStore, type Watchlist, type WatchlistStock } from '../services/watchlistStore';
 import { getMarketSession } from '../services/marketSession';
 import { subscribeTicks, type Tick } from '../services/api';
@@ -578,8 +579,9 @@ export default function Watchlist() {
 
         {/* Chart Panel (Right on Desktop, conditional on Mobile) */}
         {(!isMobile || mobileView === 'chart') && (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
             <TradingChart symbol={selectedSymbol} />
+            <ConfidenceCard symbol={selectedSymbol} />
           </div>
         )}
       </div>
