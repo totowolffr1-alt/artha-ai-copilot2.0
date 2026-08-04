@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { getServerIp } from '../services/api';
+import { IpWhitelistBanner } from '../components/IpWhitelistBanner';
 
 const BASE = '/api';
 
@@ -64,6 +65,7 @@ export default function ManualTrade() {
   const [errorMsg, setErrorMsg]   = useState('');
   const [serverIp, setServerIp]   = useState('Fetching…');
   const [copied, setCopied]       = useState(false);
+  const [ipError, setIpError]     = useState<{ serverIp: string | null; broker: string } | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -130,7 +132,12 @@ export default function ManualTrade() {
       const data = await res.json();
       setOrderResult(data);
       setStatus(data.success ? 'success' : 'error');
-      if (!data.success) setErrorMsg(data.order?.reject_reason || data.error || 'Order rejected');
+      if (!data.success) {
+        setErrorMsg(data.order?.reject_reason || data.error || 'Order rejected');
+        if (data.ipWhitelistRequired) {
+          setIpError({ serverIp: data.serverIp, broker: 'ANGELONE' });
+        }
+      }
     } catch (err: any) {
       setStatus('error');
       setErrorMsg(err.message || 'Network error');
@@ -186,6 +193,15 @@ export default function ManualTrade() {
       <p style={{ color: 'var(--muted)', marginBottom: 24, fontSize: 14 }}>
         Search any NSE stock, set quantity &amp; order type, and place directly on your Angel One account.
       </p>
+
+      {/* IP Whitelist Error Banner */}
+      {ipError && (
+        <IpWhitelistBanner
+          serverIp={ipError.serverIp}
+          brokerProvider={ipError.broker}
+          onDismiss={() => setIpError(null)}
+        />
+      )}
 
       {/* ── Stock Search ──────────────────────────────────────────────────── */}
       <div style={CARD}>

@@ -257,75 +257,93 @@ const BASE_PRICES: Record<string, number> = {
   ADANIPORTS: 1340, SUNPHARMA: 1720, ASIANPAINT: 2450, TITAN: 3300,
 };
 
+// Cache to avoid spamming Yahoo Finance chart API within a short timeframe
+const quotesCache = new Map<string, { quote: any; fetchedAt: number }>();
+const QUOTE_CACHE_TTL = 3000; // 3 seconds cache
+
 marketRouter.get('/quotes', async (req: Request, res: Response) => {
   const symbolsQuery = String(req.query.symbols || '');
   if (!symbolsQuery) return res.json({ quotes: [] });
 
   const symbols = symbolsQuery.split(',');
-  const results = [];
 
-  try {
-    const tickers = symbols.map(s => s.toUpperCase().trim().includes('.') ? s.toUpperCase().trim() : `${s.toUpperCase().trim()}.NS`);
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers.join(',')}`;
+  const fetchSingleQuote = async (symbol: string) => {
+    const upper = symbol.toUpperCase().trim();
+    const cacheKey = upper;
 
-    const { data } = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 5000
-    });
-
-    const yahooQuotes = data?.quoteResponse?.result || [];
-
-    for (const symbol of symbols) {
-      const upper = symbol.toUpperCase().trim();
-      const ticker = upper.includes('.') ? upper : `${upper}.NS`;
-      const q = yahooQuotes.find((y: any) => y.symbol === ticker);
-
-      if (q) {
-        results.push({
-          symbol: upper,
-          ltp: q.regularMarketPrice || 0,
-          open: q.regularMarketOpen || 0,
-          high: q.regularMarketDayHigh || 0,
-          low: q.regularMarketDayLow || 0,
-          prevClose: q.regularMarketPreviousClose || 0,
-          change: q.regularMarketChange || 0,
-          changePct: q.regularMarketChangePercent || 0,
-          volume: q.regularMarketVolume || 0,
-        });
-      } else {
-        const base = BASE_PRICES[upper] || 200;
-        results.push({
-          symbol: upper,
-          ltp: base,
-          open: base,
-          high: base,
-          low: base,
-          prevClose: base,
-          change: 0,
-          changePct: 0,
-          volume: 10000,
-        });
-      }
+    // Check cache
+    const cached = quotesCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < QUOTE_CACHE_TTL) {
+      return cached.quote;
     }
 
+    const base = BASE_PRICES[upper] || 200;
+    const ticker = upper.includes('.') ? upper : `${upper}.NS`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+        },
+        timeout: 4000,
+      });
+
+      const meta = response.data?.chart?.result?.[0]?.meta;
+      if (meta) {
+        const ltp = meta.regularMarketPrice || meta.previousClose || base;
+        const prevClose = meta.chartPreviousClose || meta.previousClose || base;
+        const change = ltp - prevClose;
+        const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+        const quote = {
+          symbol: upper,
+          ltp: parseFloat(ltp.toFixed(2)),
+          open: parseFloat((meta.regularMarketOpen || prevClose).toFixed(2)),
+          high: parseFloat((meta.regularMarketDayHigh || ltp).toFixed(2)),
+          low: parseFloat((meta.regularMarketDayLow || ltp).toFixed(2)),
+          prevClose: parseFloat(prevClose.toFixed(2)),
+          change: parseFloat(change.toFixed(2)),
+          changePct: parseFloat(changePct.toFixed(2)),
+          volume: meta.regularMarketVolume || 10000,
+        };
+
+        quotesCache.set(cacheKey, { quote, fetchedAt: Date.now() });
+        return quote;
+      }
+    } catch (err: any) {
+      console.warn(`[Quotes] Fallback for ${symbol} due to error: ${err.message}`);
+    }
+
+    // Default fallback if API fails
+    return {
+      symbol: upper,
+      ltp: base,
+      open: base,
+      high: base,
+      low: base,
+      prevClose: base,
+      change: 0,
+      changePct: 0,
+      volume: 10000,
+    };
+  };
+
+  try {
+    const results = await Promise.all(symbols.map(s => fetchSingleQuote(s)));
+    // Save to latestTicks cache so other services can query
+    results.forEach(q => {
+      latestTicks.set(q.symbol, {
+        symbol: q.symbol,
+        exchange: 'NSE',
+        price: q.ltp,
+        timestamp: new Date().toISOString(),
+      });
+    });
     return res.json({ quotes: results });
   } catch (err: any) {
-    const fallbackQuotes = symbols.map(s => {
-      const upper = s.toUpperCase().trim();
-      const base = BASE_PRICES[upper] || 200;
-      return {
-        symbol: upper,
-        ltp: base,
-        open: base,
-        high: base,
-        low: base,
-        prevClose: base,
-        change: 0,
-        changePct: 0,
-        volume: 10000,
-      };
-    });
-    return res.json({ quotes: fallbackQuotes, error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -444,6 +462,11 @@ marketRouter.get('/stream', (req: Request, res: Response) => {
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
   });
+
+  // Immediately send all current cached ticks so the UI populates instantly
+  for (const tick of latestTicks.values()) {
+    res.write(`data: ${JSON.stringify(tick)}\n\n`);
+  }
 
   const unsubscribe = sharedBus.on('TICK_RECEIVED', (event: any) => {
     res.write(`data: ${JSON.stringify(event.tick)}\n\n`);

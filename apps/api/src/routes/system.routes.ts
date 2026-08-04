@@ -240,3 +240,107 @@ systemRouter.get('/server-ip', async (_req: Request, res: Response) => {
   }
 });
 
+// ── GET /api/system/broker ─────────────────────────────────────────────────────
+// Returns active broker metadata + missing env vars for UI display
+systemRouter.get('/broker', (_req: Request, res: Response) => {
+  const BROKER_REGISTRY: Record<string, {
+    name: string; website: string; apiDocs: string;
+    brokerageModel: string; supportedSegments: string[]; envVarsRequired: string[];
+  }> = {
+    ANGELONE: {
+      name: 'Angel One (SmartAPI)', website: 'https://www.angelbroking.com',
+      apiDocs: 'https://smartapi.angelbroking.com/docs',
+      brokerageModel: '₹20/order for F&O, free for delivery',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'MCX'],
+      envVarsRequired: ['ANGELONE_CLIENT_ID', 'ANGELONE_CLIENT_SECRET', 'ANGELONE_PASSWORD', 'ANGELONE_TOTP_SECRET'],
+    },
+    UPSTOX: {
+      name: 'Upstox (API v2)', website: 'https://upstox.com',
+      apiDocs: 'https://upstox.com/developer/api-documentation',
+      brokerageModel: '₹20/order or 2.5% (F&O), zero on delivery',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'CDS'],
+      envVarsRequired: ['UPSTOX_ACCESS_TOKEN'],
+    },
+    ZERODHA: {
+      name: 'Zerodha (Kite Connect v3)', website: 'https://zerodha.com',
+      apiDocs: 'https://kite.trade/docs/connect/v3/',
+      brokerageModel: '₹20/order or 0.03% (intraday/F&O), zero delivery',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'CDS', 'MCX'],
+      envVarsRequired: ['ZERODHA_API_KEY', 'ZERODHA_ACCESS_TOKEN'],
+    },
+    FYERS: {
+      name: 'Fyers (API v2)', website: 'https://fyers.in',
+      apiDocs: 'https://myapi.fyers.in/docs/',
+      brokerageModel: '₹20/order (F&O), zero delivery',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'CDS', 'MCX'],
+      envVarsRequired: ['FYERS_APP_ID', 'FYERS_ACCESS_TOKEN'],
+    },
+    DHAN: {
+      name: 'Dhan HQ (API v2)', website: 'https://dhan.co',
+      apiDocs: 'https://dhanhq.co/docs/v2/',
+      brokerageModel: '₹20/order (F&O), zero on delivery',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'CDS', 'MCX'],
+      envVarsRequired: ['DHAN_CLIENT_ID', 'DHAN_ACCESS_TOKEN'],
+    },
+    SHOONYA: {
+      name: 'Shoonya by Finvasia', website: 'https://shoonya.com',
+      apiDocs: 'https://api.shoonya.com/',
+      brokerageModel: 'ZERO brokerage on ALL segments',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'CDS', 'MCX', 'NCDEX'],
+      envVarsRequired: ['SHOONYA_USER_ID', 'SHOONYA_SESSION_TOKEN'],
+    },
+    PAPER: {
+      name: 'Paper Trading (Simulated)', website: 'https://artha.ai',
+      apiDocs: 'https://artha.ai/docs/paper-trading',
+      brokerageModel: 'Free (no real money)',
+      supportedSegments: ['NSE', 'BSE', 'NFO', 'MCX'],
+      envVarsRequired: [],
+    },
+  };
+
+  const rawProvider = (process.env.BROKER_PROVIDER || 'PAPER').toUpperCase();
+  const provider = BROKER_REGISTRY[rawProvider] ? rawProvider : 'PAPER';
+  const info = BROKER_REGISTRY[provider];
+  const missingEnv = info.envVarsRequired.filter(k => !process.env[k]);
+  const isLive = provider !== 'PAPER' && missingEnv.length === 0;
+
+  res.json({
+    active: provider,
+    mode: isLive ? 'LIVE' : 'PAPER',
+    name: info.name,
+    isLive,
+    missingEnv,
+    registry: BROKER_REGISTRY,
+  });
+});
+
+// ── GET /api/system/broker/ping ────────────────────────────────────────────────
+// Checks if the active broker's API base URL is reachable
+systemRouter.get('/broker/ping', async (_req: Request, res: Response) => {
+  const BROKER_PING_URLS: Record<string, string> = {
+    ANGELONE: 'https://apiconnect.angelbroking.com',
+    UPSTOX: 'https://api-v2.upstox.com',
+    ZERODHA: 'https://api.kite.trade',
+    FYERS: 'https://api.fyers.in',
+    DHAN: 'https://api.dhan.co',
+    SHOONYA: 'https://api.shoonya.com',
+    PAPER: 'https://artha.ai',
+  };
+
+  const rawProvider = (process.env.BROKER_PROVIDER || 'PAPER').toUpperCase();
+  const provider = BROKER_PING_URLS[rawProvider] ? rawProvider : 'PAPER';
+  const pingUrl = BROKER_PING_URLS[provider];
+
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    await fetch(pingUrl, { method: 'HEAD', signal: controller.signal });
+    clearTimeout(timeout);
+    res.json({ status: 'OK', broker: provider, url: pingUrl, latencyMs: Date.now() - start });
+  } catch (err: any) {
+    res.json({ status: err.name === 'AbortError' ? 'TIMEOUT' : 'ERROR', broker: provider, url: pingUrl, latencyMs: Date.now() - start, error: err.message });
+  }
+});
+
+

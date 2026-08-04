@@ -1,6 +1,25 @@
 {
   "notifications": [
     {
+      "id": 45,
+      "read": false,
+      "timestamp": "2026-08-04T20:43:53.880Z",
+      "component": "market_data",
+      "severity": "INFO",
+      "title": "WebSocket Ticks Resumed",
+      "message": "Live broker WebSocket ticks resumed. Yahoo Finance fallback stopped."
+    },
+    {
+      "id": 44,
+      "read": false,
+      "timestamp": "2026-08-04T20:43:43.872Z",
+      "component": "market_data",
+      "severity": "WARNING",
+      "title": "WebSocket Disconnection Fallback",
+      "message": "WebSocket stream stopped receiving ticks. Switched to Yahoo Finance polling fallback.",
+      "suggested_fix": "Check Angel One SmartAPI status or api keys."
+    },
+    {
       "id": 43,
       "read": false,
       "timestamp": "2026-07-25T18:07:36.607Z",
@@ -414,652 +433,77 @@
   ],
   "health_history": [
     {
-      "id": 91,
+      "id": 159,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T18:59:27.930Z"
+      "recorded_at": "2026-08-04T20:43:43.916Z"
     },
     {
-      "id": 92,
+      "id": 160,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T18:59:57.918Z"
+      "recorded_at": "2026-08-04T20:44:13.913Z"
     },
     {
-      "id": 93,
+      "id": 161,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:00:27.933Z"
+      "recorded_at": "2026-08-04T20:44:43.925Z"
     },
     {
-      "id": 94,
+      "id": 162,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:00:57.940Z"
+      "recorded_at": "2026-08-04T20:45:13.934Z"
     },
     {
-      "id": 95,
+      "id": 163,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:01:27.947Z"
+      "recorded_at": "2026-08-04T20:45:43.941Z"
     },
     {
-      "id": 96,
+      "id": 164,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:01:57.953Z"
+      "recorded_at": "2026-08-04T20:46:13.948Z"
     },
     {
-      "id": 97,
+      "id": 165,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:02:27.955Z"
+      "recorded_at": "2026-08-04T20:46:43.948Z"
     },
     {
-      "id": 98,
+      "id": 166,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:02:57.956Z"
+      "recorded_at": "2026-08-04T20:47:13.957Z"
     },
     {
-      "id": 99,
+      "id": 167,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:03:27.960Z"
+      "recorded_at": "2026-08-04T20:47:43.966Z"
     },
     {
-      "id": 100,
+      "id": 168,
       "service": "overall",
       "score": 100,
       "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:03:57.962Z"
-    },
-    {
-      "id": 101,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:04:27.975Z"
-    },
-    {
-      "id": 102,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:04:57.986Z"
-    },
-    {
-      "id": 103,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:05:27.995Z"
-    },
-    {
-      "id": 104,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:05:58.002Z"
-    },
-    {
-      "id": 105,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:06:28.010Z"
-    },
-    {
-      "id": 106,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:06:58.016Z"
-    },
-    {
-      "id": 107,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:07:28.022Z"
-    },
-    {
-      "id": 108,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:07:58.027Z"
-    },
-    {
-      "id": 109,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:08:28.038Z"
-    },
-    {
-      "id": 110,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:08:58.047Z"
-    },
-    {
-      "id": 111,
-      "service": "overall",
-      "score": 97,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:09:28.056Z"
-    },
-    {
-      "id": 112,
-      "service": "overall",
-      "score": 97,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:09:58.063Z"
-    },
-    {
-      "id": 113,
-      "service": "overall",
-      "score": 97,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:10:28.066Z"
-    },
-    {
-      "id": 114,
-      "service": "overall",
-      "score": 97,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:10:58.081Z"
-    },
-    {
-      "id": 115,
-      "service": "overall",
-      "score": 97,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:11:28.086Z"
-    },
-    {
-      "id": 116,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:16:32.510Z"
-    },
-    {
-      "id": 117,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:17:02.506Z"
-    },
-    {
-      "id": 118,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:17:32.520Z"
-    },
-    {
-      "id": 119,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:21:49.106Z"
-    },
-    {
-      "id": 120,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:22:19.099Z"
-    },
-    {
-      "id": 121,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:22:49.117Z"
-    },
-    {
-      "id": 122,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:23:19.125Z"
-    },
-    {
-      "id": 123,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:29:41.747Z"
-    },
-    {
-      "id": 124,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:30:11.728Z"
-    },
-    {
-      "id": 125,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:30:41.731Z"
-    },
-    {
-      "id": 126,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:31:11.741Z"
-    },
-    {
-      "id": 127,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:32:15.053Z"
-    },
-    {
-      "id": 128,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:32:45.027Z"
-    },
-    {
-      "id": 129,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:33:15.030Z"
-    },
-    {
-      "id": 130,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:34:00.951Z"
-    },
-    {
-      "id": 131,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:34:30.934Z"
-    },
-    {
-      "id": 132,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:35:00.934Z"
-    },
-    {
-      "id": 133,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:35:30.943Z"
-    },
-    {
-      "id": 134,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:36:00.956Z"
-    },
-    {
-      "id": 135,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:48:21.459Z"
-    },
-    {
-      "id": 136,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:48:51.449Z"
-    },
-    {
-      "id": 137,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T19:49:21.453Z"
-    },
-    {
-      "id": 138,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:17:30.082Z"
-    },
-    {
-      "id": 139,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:18:00.050Z"
-    },
-    {
-      "id": 140,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:27:37.073Z"
-    },
-    {
-      "id": 141,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:28:07.070Z"
-    },
-    {
-      "id": 142,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:28:37.075Z"
-    },
-    {
-      "id": 143,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:29:07.086Z"
-    },
-    {
-      "id": 144,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:29:37.092Z"
-    },
-    {
-      "id": 145,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:30:07.099Z"
-    },
-    {
-      "id": 146,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:30:37.103Z"
-    },
-    {
-      "id": 147,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:31:07.106Z"
-    },
-    {
-      "id": 148,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:31:37.108Z"
-    },
-    {
-      "id": 149,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:32:07.117Z"
-    },
-    {
-      "id": 150,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:32:37.131Z"
-    },
-    {
-      "id": 151,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:33:07.142Z"
-    },
-    {
-      "id": 152,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:33:37.142Z"
-    },
-    {
-      "id": 153,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:34:07.156Z"
-    },
-    {
-      "id": 154,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:34:37.163Z"
-    },
-    {
-      "id": 155,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-24T20:35:07.179Z"
-    },
-    {
-      "id": 156,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-25T18:07:26.634Z"
-    },
-    {
-      "id": 157,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-25T18:07:56.628Z"
-    },
-    {
-      "id": 158,
-      "service": "overall",
-      "score": 100,
-      "status": "HEALTHY",
-      "recorded_at": "2026-07-25T18:08:26.638Z"
+      "recorded_at": "2026-08-04T20:48:13.971Z"
     }
   ],
-  "system_timeline": [
-    {
-      "id": 24,
-      "component": "news_engine",
-      "event": "Status changed to WARNING",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-24T19:09:28.056Z"
-    },
-    {
-      "id": 23,
-      "component": "recoveryService",
-      "event": "Recovered price_cache via retry_price_cache",
-      "severity": "INFO",
-      "recorded_at": "2026-07-22T16:29:41.607Z"
-    },
-    {
-      "id": 22,
-      "component": "recoveryService",
-      "event": "Recovered price_cache via retry_price_cache",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:39:50.657Z"
-    },
-    {
-      "id": 21,
-      "component": "recoveryService",
-      "event": "Recovered news_engine via restart_news_worker",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:39:39.843Z"
-    },
-    {
-      "id": 20,
-      "component": "recoveryService",
-      "event": "Recovered news_engine via restart_news_worker",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:39:39.234Z"
-    },
-    {
-      "id": 19,
-      "component": "recoveryService",
-      "event": "Recovered news_engine via restart_news_worker",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:39:38.318Z"
-    },
-    {
-      "id": 18,
-      "component": "portfolio_engine",
-      "event": "Status changed to HEALTHY",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:38:21.910Z"
-    },
-    {
-      "id": 17,
-      "component": "broker_api",
-      "event": "Status changed to HEALTHY",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:38:21.910Z"
-    },
-    {
-      "id": 16,
-      "component": "recoveryService",
-      "event": "Recovered market_data via reconnect_websocket",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:34:57.189Z"
-    },
-    {
-      "id": 15,
-      "component": "market_data",
-      "event": "Status changed to CRITICAL",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:34:55.187Z"
-    },
-    {
-      "id": 14,
-      "component": "market_data",
-      "event": "Status changed to WARNING",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:34:25.173Z"
-    },
-    {
-      "id": 13,
-      "component": "broker_api",
-      "event": "Status changed to HEALTHY",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:34:25.173Z"
-    },
-    {
-      "id": 12,
-      "component": "recoveryService",
-      "event": "Recovered market_data via reconnect_websocket",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:32:11.398Z"
-    },
-    {
-      "id": 11,
-      "component": "market_data",
-      "event": "Status changed to CRITICAL",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:32:09.385Z"
-    },
-    {
-      "id": 10,
-      "component": "market_data",
-      "event": "Status changed to WARNING",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:31:39.378Z"
-    },
-    {
-      "id": 9,
-      "component": "broker_api",
-      "event": "Status changed to HEALTHY",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:31:39.378Z"
-    },
-    {
-      "id": 8,
-      "component": "recoveryService",
-      "event": "Recovered market_data via reconnect_websocket",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:21:17.647Z"
-    },
-    {
-      "id": 7,
-      "component": "market_data",
-      "event": "Status changed to CRITICAL",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:21:15.633Z"
-    },
-    {
-      "id": 6,
-      "component": "market_data",
-      "event": "Status changed to WARNING",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:20:45.629Z"
-    },
-    {
-      "id": 5,
-      "component": "broker_api",
-      "event": "Status changed to HEALTHY",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:20:45.629Z"
-    },
-    {
-      "id": 4,
-      "component": "recoveryService",
-      "event": "Recovered market_data via reconnect_websocket",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:11:34.651Z"
-    },
-    {
-      "id": 3,
-      "component": "market_data",
-      "event": "Status changed to CRITICAL",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:11:32.638Z"
-    },
-    {
-      "id": 2,
-      "component": "market_data",
-      "event": "Status changed to WARNING",
-      "severity": "WARNING",
-      "recorded_at": "2026-07-21T19:11:02.631Z"
-    },
-    {
-      "id": 1,
-      "component": "broker_api",
-      "event": "Status changed to HEALTHY",
-      "severity": "INFO",
-      "recorded_at": "2026-07-21T19:11:02.631Z"
-    }
-  ],
+  "system_timeline": [],
   "recovery_events": [
     {
       "id": 9,
@@ -1136,8 +580,8 @@
   ],
   "trade_journal": [],
   "_counters": {
-    "health_history": 158,
-    "notifications": 43,
+    "health_history": 168,
+    "notifications": 45,
     "system_timeline": 24,
     "recovery_events": 9,
     "push_subscriptions": 1,

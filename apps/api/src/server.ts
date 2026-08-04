@@ -1,7 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
-dotenv.config({ path: require('path').resolve(__dirname, '../../../.env') });
+import * as path from 'path';
+
+// Load .env using multiple fallback paths to support both dev (ts-node) and production (dist) modes
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') }); // dev mode: apps/api/src -> root
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') }); // prod mode: dist/apps/api/src -> root
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+
 
 import { SimpleEventBus } from '../../../packages/phase2-market-data/src/marketData/SimpleEventBus';
 import { MockMarketDataAdapter } from '../../../packages/phase2-market-data/src/marketData/adapters/mock/MockAdapter';
@@ -20,6 +27,8 @@ import { systemRouter } from './routes/system.routes';
 import { journalRouter } from './routes/journal.routes';
 import { vaultRouter } from './routes/vault.routes';
 import { ordersRouter } from './routes/orders.routes';
+import { agentRouter } from './routes/agent.routes';
+import { sandboxRouter } from './routes/sandbox.routes';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 
@@ -48,6 +57,8 @@ async function main() {
   app.use('/api/vault',     vaultRouter);
   app.use('/api/orders',    ordersRouter);
   app.use('/api/analysis',  analysisRouter);
+  app.use('/api/agent',     agentRouter);
+  app.use('/api/sandbox',   sandboxRouter);
 
   app.get('/api/health', (_req, res) => {
     res.json({

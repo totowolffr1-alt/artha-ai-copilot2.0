@@ -8,6 +8,8 @@ import Backtesting from './pages/Backtesting';
 import NewsIntelligence from './pages/NewsIntelligence';
 import SystemHealth from './pages/SystemHealth';
 import ManualTrade from './pages/ManualTrade';
+import SandboxPage from './pages/Sandbox';
+import BrokerSettings from './pages/BrokerSettings';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthGate } from './components/AuthGate';
 
@@ -21,6 +23,8 @@ const NAV = [
   { to: '/backtesting', label: '🧪 Backtesting' },
   { to: '/news',        label: '📰 News Intel' },
   { to: '/system',      label: '⚙️ System Health' },
+  { to: '/sandbox',     label: '🧪 Dual Sandbox' },
+  { to: '/broker',      label: '🔌 Broker Settings' },
 ];
 
 // Mobile bottom tab bar — 5 primary items
@@ -115,6 +119,8 @@ export default function App() {
               <Route path="/backtesting" element={wrap(<Backtesting />)} />
               <Route path="/news"        element={wrap(<NewsIntelligence />)} />
               <Route path="/system"      element={wrap(<SystemHealth />)} />
+              <Route path="/sandbox"     element={wrap(<SandboxPage />)} />
+              <Route path="/broker"      element={wrap(<BrokerSettings />)} />
             </Routes>
           </main>
 

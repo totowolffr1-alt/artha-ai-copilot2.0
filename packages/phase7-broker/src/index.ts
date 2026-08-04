@@ -19,8 +19,17 @@ export * from './protection/SmartTrailingStop';
 export * from './state/ExecutionStateMachine';
 export * from './orchestrator/ExecutionOrchestrator';
 
-// Adapters
+// Adapters — all supported brokers
 export * from './adapters/PaperBrokerAdapter';
 export * from './adapters/LiveBrokerAdapterMock';
 export * from './adapters/AngelOneBrokerAdapter';
 export * from './adapters/AngelOneAuthManager';
+export * from './adapters/UpstoxBrokerAdapter';
+export * from './adapters/ZerodhaBrokerAdapter';
+export * from './adapters/FyersBrokerAdapter';
+export * from './adapters/DhanBrokerAdapter';
+export * from './adapters/ShoonyaBrokerAdapter';
+
+// Universal Factory — use this everywhere
+export * from './adapters/BrokerFactory';
+

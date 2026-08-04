@@ -1,11 +1,7 @@
-/**
- * trading.routes.ts
- * Uses shared brokerSession singleton — no separate auth, no duplicate TOTP.
- */
-
 import { Router, Request, Response } from 'express';
-import { getJwtToken, getApiHeaders, getSessionStatus } from '../services/brokerSession';
-import axios from 'axios';
+import { getJwtToken, getSessionStatus } from '../services/brokerSession';
+import { createBrokerAdapter } from '../../../../packages/phase7-broker/src/adapters/BrokerFactory';
+import { OrderRequest } from '../../../../packages/phase7-broker/src/types/domain';
 
 export const tradingRouter = Router();
 
@@ -28,69 +24,66 @@ tradingRouter.post('/orders', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Missing required parameters: symbol, direction, qty' });
   }
 
-  const token = await getJwtToken();
-  const { lastError } = getSessionStatus();
-
-  if (!token) {
-    return res.status(401).json({
-      error: 'Broker not authenticated',
-      message: lastError || 'Angel One login required. Check .env credentials.',
-    });
-  }
-
+  const { adapter, provider } = createBrokerAdapter();
   const orderId = makeOrderId();
-  const headers = await getApiHeaders();
 
-  // Build Angel One order payload
-  const orderPayload = {
-    variety:          'NORMAL',
-    tradingsymbol:    symbol,
-    symboltoken:      '', // will be resolved in Phase 12 with live market data
-    transactiontype:  direction === 'LONG' ? 'BUY' : 'SELL',
-    exchange:         'NSE',
-    ordertype:        order_type || 'MARKET',
-    producttype:      product_type || 'DELIVERY',
-    duration:         'DAY',
-    price:            price ? String(parseFloat(price)) : '0',
-    squareoff:        '0',
-    stoploss:         '0',
-    quantity:         String(parseInt(qty, 10)),
+  const orderRequest: OrderRequest = {
+    order_request_id: orderId,
+    intent_id: `man-intent-${orderId}`,
+    idempotency_key: `man-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    symbol_id: symbol.toUpperCase(),
+    broker_direction: direction === 'SELL' ? 'SELL' : 'BUY',
+    qty: parseInt(qty, 10),
+    price: price ? parseFloat(price) : 0,
+    order_type: order_type || 'MARKET',
+    trigger_price: null,
+    product_type: product_type === 'INTRADAY' ? 'MIS' : 'CNC',
+    validity: 'DAY',
+    created_at: new Date(),
+    attempt: 1,
   };
 
   try {
-    const { data } = await axios.post(
-      'https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/placeOrder',
-      orderPayload,
-      { headers, timeout: 8000 }
-    );
-
-    const brokerOrderId = data?.data?.orderid || `sim-${orderId}`;
-    const status = data?.status === true ? 'OPEN' : 'REJECTED';
-    const rejectReason = data?.status !== true ? (data?.message || 'Unknown reason') : null;
+    const brokerResponse = await adapter.placeOrder(orderRequest);
+    const success = brokerResponse.normalized_status === 'OPEN' || brokerResponse.normalized_status === 'FILLED';
 
     const record = {
       order_request_id: orderId,
-      symbol,
-      direction,
-      qty: parseInt(qty, 10),
-      price: price ? parseFloat(price) : null,
-      order_type: order_type || 'MARKET',
-      product_type: product_type || 'DELIVERY',
-      broker_order_id: brokerOrderId,
-      status,
-      reject_reason: rejectReason,
+      symbol: orderRequest.symbol_id,
+      direction: orderRequest.broker_direction === 'BUY' ? 'LONG' : 'SHORT',
+      qty: orderRequest.qty,
+      price: orderRequest.price || null,
+      order_type: orderRequest.order_type,
+      product_type: orderRequest.product_type === 'MIS' ? 'INTRADAY' : 'DELIVERY',
+      broker_order_id: brokerResponse.broker_order_id || `sim-${orderId}`,
+      status: success ? 'OPEN' : 'REJECTED',
+      reject_reason: brokerResponse.reject_reason,
       executed_at: new Date().toISOString(),
     };
 
     orderStore.set(orderId, record);
-    console.log(`[Trading] Order ${status}: ${direction} ${qty} ${symbol} @ ${price || 'MARKET'}`);
+    console.log(`[Trading] Order ${record.status} via ${provider}: ${record.direction} ${record.qty} ${record.symbol} @ ${record.price || 'MARKET'}`);
 
-    return res.json({ success: status === 'OPEN', order: record });
+    const payload = brokerResponse.raw_payload ?? {};
+    const ipWhitelistRequired = !!payload.ipWhitelistRequired;
+
+    return res.json({
+      success,
+      order: record,
+      ...(ipWhitelistRequired && {
+        ipWhitelistRequired: true,
+        serverIp: payload.serverIp || null,
+        whitelistUrl: 'https://smartapi.angelbroking.com/enable-api',
+        message: `Your server IP (${payload.serverIp}) is not whitelisted. Add it at smartapi.angelbroking.com/enable-api`,
+      }),
+    });
   } catch (err: any) {
-    // Simulated order for dev/test when API not reachable
+    // Simulated order for dev/test when API not reachable or error occurs
     const simRecord = {
       order_request_id: orderId,
-      symbol, direction, qty: parseInt(qty, 10),
+      symbol: symbol.toUpperCase(),
+      direction,
+      qty: parseInt(qty, 10),
       price: price ? parseFloat(price) : null,
       order_type: order_type || 'MARKET',
       product_type: product_type || 'DELIVERY',
@@ -106,6 +99,7 @@ tradingRouter.post('/orders', async (req: Request, res: Response) => {
 });
 
 // ── GET /api/trading/orders/:id ────────────────────────────────────────────────
+
 tradingRouter.get('/orders/:id', (req: Request, res: Response) => {
   const order = orderStore.get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });

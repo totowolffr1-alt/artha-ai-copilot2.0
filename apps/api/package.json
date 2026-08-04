@@ -8,6 +8,7 @@
     "start": "node dist/apps/api/src/server.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@types/node-cron": "^3.0.11",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",

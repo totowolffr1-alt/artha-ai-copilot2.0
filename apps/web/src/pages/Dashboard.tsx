@@ -4,6 +4,8 @@ import { getMarketSession } from '../services/marketSession';
 import { CapitalVaultCard } from '../components/CapitalVaultCard';
 import { RiskDashboard } from '../components/RiskDashboard';
 import { OrderBook } from '../components/OrderBook';
+import SuggestionBox from '../components/SuggestionBox';
+import { IpWhitelistBanner } from '../components/IpWhitelistBanner';
 
 const INITIAL_SIGNALS: Signal[] = [
   {
@@ -58,6 +60,7 @@ export default function Dashboard() {
   const [killSwitchActive] = useState(false);
   const [serverIp, setServerIp] = useState('Fetching…');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [ipError, setIpError] = useState<{ serverIp: string | null; broker: string } | null>(null);
   const [copilotData, setCopilotData] = useState<{ trades: any[]; summary: any }>({
     trades: [],
     summary: { totalPnL: 0, openTrades: 0, todayTrades: 0, winRate: 0 },
@@ -138,6 +141,9 @@ export default function Dashboard() {
           ...prev,
           [sig.signal_id]: `REJECTED: ${res.order.reject_reason || 'Broker reject'}`
         }));
+        if (res.ipWhitelistRequired) {
+          setIpError({ serverIp: res.serverIp, broker: 'ANGELONE' });
+        }
       }
     } catch (err: any) {
       setExecutionResult(prev => ({
@@ -168,6 +174,15 @@ export default function Dashboard() {
 
       <h2>Dashboard <span className="badge">LIVE TERMINAL</span></h2>
 
+      {/* IP Whitelist Error Banner */}
+      {ipError && (
+        <IpWhitelistBanner
+          serverIp={ipError.serverIp}
+          brokerProvider={ipError.broker}
+          onDismiss={() => setIpError(null)}
+        />
+      )}
+
       {/* Market Session Banner */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -191,6 +206,9 @@ export default function Dashboard() {
 
       {/* 🤖 Quant Employee — Capital Vault Allotment Widget */}
       <CapitalVaultCard />
+
+      {/* AI Suggestion Box */}
+      <SuggestionBox />
 
       {/* 🤖 Copilot Activity — Live Trade Monitor */}
       <div className="card" style={{
