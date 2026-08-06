@@ -137,10 +137,15 @@ export default function Dashboard() {
           ...prev,
           [sig.signal_id]: `FILLED (Broker Order: ${res.order.broker_order_id})`
         }));
+      } else if (res.error === 'ASM_RESTRICTED') {
+        setExecutionResult(prev => ({
+          ...prev,
+          [sig.signal_id]: `⚠️ ASM RESTRICTED: ${sig.symbol} is under NSE surveillance. Trade it manually in Angel One.`
+        }));
       } else {
         setExecutionResult(prev => ({
           ...prev,
-          [sig.signal_id]: `REJECTED: ${res.order.reject_reason || 'Broker reject'}`
+          [sig.signal_id]: `REJECTED: ${res.order?.reject_reason || res.message || 'Broker reject'}`
         }));
         if (res.ipWhitelistRequired) {
           setIpError({ serverIp: res.serverIp, broker: 'ANGELONE' });

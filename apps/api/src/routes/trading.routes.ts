@@ -78,7 +78,41 @@ tradingRouter.post('/orders', async (req: Request, res: Response) => {
       }),
     });
   } catch (err: any) {
-    // Simulated order for dev/test when API not reachable or error occurs
+    const errMsg: string = err?.message || '';
+
+    // ── Detect ASM / Cautionary Listing Exchange Restriction ────────────────
+    const isAsmRestricted =
+      errMsg.toLowerCase().includes('cautionary') ||
+      errMsg.toLowerCase().includes('surveillance') ||
+      errMsg.toLowerCase().includes('asm') ||
+      errMsg.toLowerCase().includes('gsm');
+
+    if (isAsmRestricted) {
+      const rejRecord = {
+        order_request_id: orderId,
+        symbol: symbol.toUpperCase(),
+        direction,
+        qty: parseInt(qty, 10),
+        price: price ? parseFloat(price) : null,
+        order_type: order_type || 'LIMIT',
+        product_type: product_type || 'DELIVERY',
+        broker_order_id: null,
+        status: 'REJECTED',
+        reject_reason: 'ASM_RESTRICTED',
+        executed_at: new Date().toISOString(),
+      };
+      orderStore.set(orderId, rejRecord);
+      console.warn(`[Trading] ASM Restricted: ${symbol} cannot be traded via API.`);
+      return res.json({
+        success: false,
+        order: rejRecord,
+        error: 'ASM_RESTRICTED',
+        message: `${symbol.toUpperCase()} is under NSE surveillance (ASM/GSM list). API trading is blocked by the exchange. Please trade it manually in your Angel One app.`,
+        manualTradeUrl: 'https://trade.angelone.in',
+      });
+    }
+
+    // ── Generic fallback: simulated order for dev/test ───────────────────────
     const simRecord = {
       order_request_id: orderId,
       symbol: symbol.toUpperCase(),
