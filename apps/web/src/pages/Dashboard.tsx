@@ -128,13 +128,13 @@ export default function Dashboard() {
     };
   }, []);
 
-  async function handleExecuteOrder(sig: Signal) {
+  async function handleExecuteOrder(sig: Signal, qty: number) {
     setExecutingSignalId(sig.signal_id);
     try {
       const res = await placeOrder({
         symbol: sig.symbol,
         direction: sig.direction === 'LONG' ? 'BUY' : 'SELL',
-        qty: 10,
+        qty,
         order_type: 'LIMIT',
         price: sig.entry_price
       });
@@ -149,12 +149,21 @@ export default function Dashboard() {
           [sig.signal_id]: `⚠️ ASM RESTRICTED: ${sig.symbol} is under NSE surveillance. Trade it manually in Angel One.`
         }));
       } else {
+        // ── Extract IP from broker error message directly ────────────────────
+        const rejectText = res.order?.reject_reason || res.message || '';
+        const ipFromError = rejectText.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1] || null;
+        const displayIp = res.serverIp && res.serverIp !== 'unknown'
+          ? res.serverIp
+          : ipFromError || serverIp;
+
         setExecutionResult(prev => ({
           ...prev,
-          [sig.signal_id]: `REJECTED: ${res.order?.reject_reason || res.message || 'Broker reject'}`
+          [sig.signal_id]: `REJECTED: ${rejectText || 'Broker reject'}`
         }));
-        if (res.ipWhitelistRequired) {
-          setIpError({ serverIp: res.serverIp, broker: 'ANGELONE' });
+        if (res.ipWhitelistRequired || ipFromError) {
+          setIpError({ serverIp: displayIp, broker: 'ANGELONE' });
+          // Also update the displayed server IP so Copy button works
+          if (displayIp && displayIp !== 'unknown') setServerIp(displayIp);
         }
       }
     } catch (err: any) {
@@ -540,7 +549,7 @@ export default function Dashboard() {
               {[
                 ['Stock', confirmingSignal.symbol],
                 ['Side', confirmingSignal.direction === 'LONG' ? 'BUY' : 'SELL'],
-                ['Qty', '10 shares'], // default execution quantity
+                ['Qty', `${availableFunds ? Math.floor(availableFunds / confirmingSignal.entry_price) : 1} shares`],
                 ['Price', `₹${confirmingSignal.entry_price}`],
                 ['Strategy', confirmingSignal.strategy],
               ].map(([k, v]) => (
@@ -563,8 +572,9 @@ export default function Dashboard() {
               <button
                 onClick={() => {
                   const sig = confirmingSignal;
+                  const qty = availableFunds ? Math.max(1, Math.floor(availableFunds / sig.entry_price)) : 1;
                   setConfirmingSignal(null);
-                  handleExecuteOrder(sig);
+                  handleExecuteOrder(sig, qty);
                 }}
                 style={{
                   flex: 2, padding: '12px 0', borderRadius: 10, border: 'none',
