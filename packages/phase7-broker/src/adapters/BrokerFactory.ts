@@ -131,10 +131,10 @@ export function createBrokerAdapter(env: Record<string, string | undefined> = pr
   switch (provider) {
     case 'ANGELONE':
       adapter = new AngelOneBrokerAdapter(
-        env.ANGELONE_CLIENT_ID || 'simulated-client-id',
-        env.ANGELONE_CLIENT_SECRET || 'simulated-secret',
-        env.ANGELONE_PASSWORD || 'simulated-pass',
-        env.ANGELONE_TOTP_SECRET || 'simulated-totp'
+        env.ANGELONE_CLIENT_ID || env.SMARTAPI_CLIENT_ID || 'simulated-client-id',
+        env.ANGELONE_CLIENT_SECRET || env.SMARTAPI_API_KEY || 'simulated-secret',
+        env.ANGELONE_PASSWORD || env.SMARTAPI_PASSWORD || 'simulated-pass',
+        env.ANGELONE_TOTP_SECRET || env.SMARTAPI_TOTP_SECRET || 'simulated-totp'
       );
       break;
 
