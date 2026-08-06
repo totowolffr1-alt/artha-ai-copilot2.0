@@ -129,7 +129,8 @@ export default function Dashboard() {
         symbol: sig.symbol,
         direction: sig.direction === 'LONG' ? 'BUY' : 'SELL',
         qty: 10,
-        order_type: 'LIMIT'
+        order_type: 'LIMIT',
+        price: sig.entry_price
       });
       if (res.success) {
         setExecutionResult(prev => ({
