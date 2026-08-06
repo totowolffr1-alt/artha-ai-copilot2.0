@@ -252,6 +252,32 @@ export function CapitalVaultCard() {
             <div style={{ fontSize: 12, color: '#818cf8', marginBottom: 10 }}>
               Allocate virtual capital for paper trading. No real money involved.
             </div>
+
+            {/* Dynamic Copilot Advice for Zero Capital */}
+            {(vault.allocatedCapital ?? 0) === 0 && (
+              <div style={{
+                margin: '0 0 16px 0',
+                padding: '12px 16px',
+                borderRadius: 12,
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+                animation: 'pulse 3s infinite'
+              }}>
+                <div style={{ fontSize: 22 }}>🤖</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#e0e7ff', marginBottom: 4 }}>
+                    Copilot Learning Offline — Capital Required
+                  </div>
+                  <div style={{ fontSize: 12, color: '#a5b4fc', lineHeight: 1.45 }}>
+                    I need virtual capital to run my execution models. Allot <strong>₹5,000</strong> for stock-specific <strong>Micro-learning</strong> (ATR sizing & local volatility) or <strong>₹50,000</strong> to initialize <strong>Macro-learning</strong> (regime scaling & portfolio drawdown protection).
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ position: 'relative', flex: '1 1 180px' }}>
                 <span style={{ position: 'absolute', left: 12, top: 9, color: 'var(--muted)', fontSize: 14 }}>₹</span>
@@ -280,15 +306,22 @@ export function CapitalVaultCard() {
                 borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13,
               }}>➖ Release</button>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Quick:</span>
-              {[500, 2000, 5000, 10000, 50000].map(p => (
-                <button key={p} onClick={() => { setPaperAmount(String(p)); handleAllocate(p); }} style={{
-                  padding: '4px 10px', borderRadius: 6,
-                  background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)',
-                  color: '#818cf8', fontSize: 12, cursor: 'pointer', fontFamily: 'monospace',
-                }}>+₹{p >= 1000 ? `${p / 1000}k` : p}</button>
-              ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Allot Quick Presets:</span>
+              <button onClick={() => { setPaperAmount('5000'); handleAllocate(5000); }} style={{
+                padding: '5px 12px', borderRadius: 6,
+                background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)',
+                color: '#34d399', fontSize: 11, cursor: 'pointer', fontWeight: 600
+              }}>
+                📊 ₹5,000 (Micro-Learning)
+              </button>
+              <button onClick={() => { setPaperAmount('50000'); handleAllocate(50000); }} style={{
+                padding: '5px 12px', borderRadius: 6,
+                background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)',
+                color: '#a78bfa', fontSize: 11, cursor: 'pointer', fontWeight: 600
+              }}>
+                🌐 ₹50,000 (Macro-Regime)
+              </button>
             </div>
           </div>
         )}
