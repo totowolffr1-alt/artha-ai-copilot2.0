@@ -14,6 +14,7 @@ export class TradeJournalService {
    * Records a new trade entry in SQLite.
    */
   static recordEntry(entry: {
+    trade_id?: string;
     symbol: string;
     segment?: 'INTRADAY' | 'DELIVERY';
     direction: 'LONG' | 'SHORT';
@@ -24,7 +25,7 @@ export class TradeJournalService {
     regime?: string;
     regime_confidence?: number;
   }): TradeJournalRecord {
-    const trade_id = `trd-${Math.random().toString(36).substring(2, 11)}`;
+    const trade_id = entry.trade_id || `trd-${Math.random().toString(36).substring(2, 11)}`;
     const segment = entry.segment || 'INTRADAY';
 
     return tradeJournal.insert({

@@ -161,7 +161,8 @@ export async function executeSignal(signal: SignalEvent): Promise<{
   }
 
   // ── Step 3: Reserve capital ───────────────────────────────────────────────
-  const reserved = capitalVault.reserveCapital(signal.signal_id, signal.symbol, finalTradeValue);
+  const tradeId = `trd-${Math.random().toString(36).substring(2, 11)}`;
+  const reserved = capitalVault.reserveCapital(tradeId, signal.symbol, finalTradeValue);
   if (!reserved) {
     return { executed: false, isPaper: false, reason: 'Capital reservation failed — vault may be in restricted state.' };
   }
@@ -185,12 +186,26 @@ export async function executeSignal(signal: SignalEvent): Promise<{
 
   if (!result.success) {
     // Release capital back if order fails
-    capitalVault.releaseCapital(signal.signal_id, 0);
+    capitalVault.releaseCapital(tradeId, 0);
     return { executed: false, isPaper: result.isPaper, reason: result.message };
   }
 
   // ── Step 5: Record in Trade Journal ──────────────────────────────────────
   riskGuardian.onPositionOpened();
+
+  // Log trade entry to the SQLite database
+  TradeJournalService.recordEntry({
+    trade_id: tradeId,
+    symbol: signal.symbol,
+    segment: 'INTRADAY',
+    direction: signal.direction === 'LONG' ? 'LONG' : 'SHORT',
+    entry_price: signal.entry_price,
+    quantity: finalQty,
+    stop_loss: signal.stop_loss,
+    take_profit: signal.take_profit,
+    regime: signal.regime,
+    regime_confidence: Math.round(signal.confidence * 100),
+  });
 
   await pushNotification({
     component: 'OrderExecution',
@@ -202,7 +217,7 @@ export async function executeSignal(signal: SignalEvent): Promise<{
   return {
     executed: true,
     isPaper: result.isPaper,
-    orderId: result.orderId,
+    orderId: result.orderId || tradeId,
     reason: `${result.isPaper ? 'Paper' : 'Live'} order placed: ${direction} ${finalQty}x ${signal.symbol} @ ₹${signal.entry_price}`,
   };
 }
