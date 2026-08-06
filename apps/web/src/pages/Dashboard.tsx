@@ -53,7 +53,8 @@ export default function Dashboard() {
   const [executingSignalId, setExecutingSignalId] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<Record<string, string>>({});
   const [confirmingSignal, setConfirmingSignal] = useState<Signal | null>(null);
-  
+  const [availableFunds, setAvailableFunds] = useState<number | null>(null);
+
   const [regime] = useState('STRONG_BULL');
   const [vix] = useState(14.5);
   const [drawdown] = useState(-0.04);
@@ -66,10 +67,15 @@ export default function Dashboard() {
     summary: { totalPnL: 0, openTrades: 0, todayTrades: 0, winRate: 0 },
   });
 
-  // Poll copilot trades every 5 seconds
+  // Poll copilot trades every 5 seconds + fetch available balance
   useEffect(() => {
     getCopilotTrades().then(setCopilotData);
     getServerIp().then(setServerIp);
+    // Fetch live available balance from broker
+    fetch('/api/portfolio')
+      .then(r => r.json())
+      .then(d => setAvailableFunds(d.availableFunds ?? 0))
+      .catch(() => setAvailableFunds(0));
     const id = setInterval(() => getCopilotTrades().then(setCopilotData), 5000);
     return () => clearInterval(id);
   }, []);
@@ -333,20 +339,61 @@ export default function Dashboard() {
             <span className="badge">{signals.length} Active</span>
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {signals.map(sig => (
+            {signals.map(sig => {
+              // ── Affordability calculation ───────────────────────────────────
+              const maxAffordableQty = availableFunds !== null
+                ? Math.floor(availableFunds / sig.entry_price)
+                : null;
+              const canAfford = maxAffordableQty !== null && maxAffordableQty >= 1;
+              const shortByAmount = canAfford || maxAffordableQty === null
+                ? 0
+                : Math.ceil(sig.entry_price - availableFunds!);
+              const suggestedQty = canAfford ? maxAffordableQty : 0;
+              const riskAmount = canAfford
+                ? (suggestedQty * (sig.entry_price - sig.stop_loss)).toFixed(0)
+                : '0';
+
+              return (
               <div key={sig.signal_id} style={{
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid var(--border)',
+                background: canAfford
+                  ? 'rgba(255,255,255,0.02)'
+                  : 'rgba(245,158,11,0.03)',
+                border: canAfford
+                  ? '1px solid var(--border)'
+                  : '1px solid rgba(245,158,11,0.25)',
                 borderRadius: 10, padding: 14,
+                opacity: canAfford ? 1 : 0.85,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
                     <span style={{ fontWeight: 700, fontSize: 14, color: '#fff', marginRight: 8 }}>{sig.symbol}</span>
                     <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>{sig.strategy}</span>
                   </div>
-                  <span className={`badge ${sig.direction === 'LONG' ? 'success' : 'danger'}`}>
-                    {sig.direction}
-                  </span>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {/* Affordability badge */}
+                    {availableFunds !== null && (
+                      canAfford ? (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
+                          background: 'rgba(16,185,129,0.12)', color: '#10b981',
+                          border: '1px solid rgba(16,185,129,0.2)',
+                        }}>
+                          ✅ {suggestedQty} qty · ₹{riskAmount} risk
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
+                          background: 'rgba(245,158,11,0.12)', color: '#f59e0b',
+                          border: '1px solid rgba(245,158,11,0.3)',
+                        }}>
+                          ⚠️ Short by ₹{shortByAmount.toLocaleString('en-IN')}
+                        </span>
+                      )
+                    )}
+                    <span className={`badge ${sig.direction === 'LONG' ? 'success' : 'danger'}`}>
+                      {sig.direction}
+                    </span>
+                  </div>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
                   <div>Entry: <strong style={{ color: '#fff' }}>₹{sig.entry_price}</strong></div>
@@ -354,6 +401,18 @@ export default function Dashboard() {
                   <div>Target: <strong style={{ color: '#10b981' }}>₹{sig.target_price}</strong></div>
                   <div>Confidence: <strong style={{ color: '#a78bfa' }}>{(sig.confidence * 100).toFixed(0)}%</strong></div>
                 </div>
+
+                {/* Cost breakdown bar for unaffordable signals */}
+                {!canAfford && availableFunds !== null && (
+                  <div style={{
+                    background: 'rgba(245,158,11,0.06)', borderRadius: 6, padding: '6px 10px',
+                    marginBottom: 8, border: '1px solid rgba(245,158,11,0.15)',
+                    fontSize: 11, color: '#fbbf24',
+                  }}>
+                    💰 Need ₹{sig.entry_price.toLocaleString('en-IN')} · Available ₹{availableFunds.toLocaleString('en-IN')} · Add ₹{shortByAmount.toLocaleString('en-IN')} to trade 1 share
+                  </div>
+                )}
+
                 {executionResult[sig.signal_id] ? (
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: executionResult[sig.signal_id].startsWith('FILLED') ? '#10b981' : '#ef4444', marginBottom: 6 }}>
@@ -387,15 +446,28 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => setConfirmingSignal(sig)}
-                    disabled={executingSignalId === sig.signal_id}
-                    style={{ width: '100%', padding: '8px 0', fontSize: 12 }}
+                    onClick={() => canAfford ? setConfirmingSignal(sig) : undefined}
+                    disabled={executingSignalId === sig.signal_id || !canAfford}
+                    title={!canAfford ? `Insufficient balance — need ₹${shortByAmount.toLocaleString('en-IN')} more` : ''}
+                    style={{
+                      width: '100%', padding: '8px 0', fontSize: 12,
+                      opacity: canAfford ? 1 : 0.5,
+                      cursor: canAfford ? 'pointer' : 'not-allowed',
+                      background: canAfford ? undefined : 'rgba(107,114,128,0.2)',
+                      color: canAfford ? undefined : '#6b7280',
+                      border: canAfford ? undefined : '1px solid rgba(107,114,128,0.3)',
+                    }}
                   >
-                    {executingSignalId === sig.signal_id ? 'Executing Order…' : '⚡ Execute Trade'}
+                    {executingSignalId === sig.signal_id
+                      ? 'Executing Order…'
+                      : canAfford
+                        ? `⚡ Execute Trade · ${suggestedQty} shares`
+                        : `💰 Insufficient Balance`}
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
