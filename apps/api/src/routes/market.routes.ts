@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import type { IEventBus } from '../../../../packages/phase2-market-data/src/marketData/EventBus';
 import type { MockMarketDataAdapter } from '../../../../packages/phase2-market-data/src/marketData/adapters/mock/MockAdapter';
+import { toYahooTicker } from '../utils/yahooMapper';
 
 export const marketRouter = Router();
 
@@ -103,8 +104,7 @@ function generateFallbackCandles(symbol: string, range: string, basePrice: numbe
 }
 
 export async function fetchYahooFinance(symbol: string, range: string, interval: string) {
-  const upper = symbol.toUpperCase().trim();
-  const ticker = upper.includes('.') ? upper : `${upper}.NS`;
+  const ticker = toYahooTicker(symbol);
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;
   const { data } = await axios.get(url, {
     params: { range, interval, includePrePost: false },
@@ -238,16 +238,23 @@ marketRouter.get('/search', async (req: Request, res: Response) => {
 });
 
 marketRouter.get('/watchlist', (_req: Request, res: Response) => {
-  res.json({
-    watchlist: [
-      { ticker: 'RELIANCE', exchange: 'NSE' },
-      { ticker: 'TCS', exchange: 'NSE' },
-      { ticker: 'INFY', exchange: 'NSE' },
-      { ticker: 'CUPID', exchange: 'NSE' },
-      { ticker: 'ZOMATO', exchange: 'NSE' },
-      { ticker: 'SILVERBEES', exchange: 'NSE' },
-    ]
+  const watchlist = [
+    { ticker: 'RELIANCE', exchange: 'NSE' },
+    { ticker: 'TCS', exchange: 'NSE' },
+    { ticker: 'INFY', exchange: 'NSE' },
+    { ticker: 'CUPID', exchange: 'NSE' },
+    { ticker: 'ZOMATO', exchange: 'NSE' },
+    { ticker: 'SILVERBEES', exchange: 'NSE' },
+  ].map(item => {
+    const cached = latestTicks.get(item.ticker);
+    return {
+      ...item,
+      symbol: item.ticker,
+      price: cached?.price || BASE_PRICES[item.ticker] || (item.ticker === 'SILVERBEES' ? 344.44 : 100),
+      last_price: cached?.price || BASE_PRICES[item.ticker] || (item.ticker === 'SILVERBEES' ? 344.44 : 100),
+    };
   });
+  res.json({ watchlist });
 });
 
 const BASE_PRICES: Record<string, number> = {
@@ -278,7 +285,7 @@ marketRouter.get('/quotes', async (req: Request, res: Response) => {
     }
 
     const base = BASE_PRICES[upper] || 200;
-    const ticker = upper.includes('.') ? upper : `${upper}.NS`;
+    const ticker = toYahooTicker(upper);
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
 
     try {
@@ -350,9 +357,7 @@ marketRouter.get('/quotes', async (req: Request, res: Response) => {
 // ── Single-symbol live price (direct Yahoo Finance, no WebSocket needed) ────
 marketRouter.get('/live-price', async (req: Request, res: Response) => {
   const symbol = String(req.query.symbol || 'RELIANCE');
-  const exchange = String(req.query.exchange || 'NSE');
-  const suffix = exchange === 'BSE' ? '.BO' : '.NS';
-  const ticker = `${symbol}${suffix}`;
+  const ticker = toYahooTicker(symbol);
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
     const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -361,7 +366,7 @@ marketRouter.get('/live-price', async (req: Request, res: Response) => {
     if (!meta) throw new Error('No meta');
     return res.json({
       symbol,
-      exchange,
+      exchange:      String(req.query.exchange || 'NSE'),
       price:         meta.regularMarketPrice || meta.previousClose,
       high:          meta.regularMarketDayHigh,
       low:           meta.regularMarketDayLow,

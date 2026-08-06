@@ -11,12 +11,13 @@
 
 import axios from 'axios';
 import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/SignalEngine';
+import { toYahooTicker } from '../utils/yahooMapper';
 
 // ── Yahoo Finance Fetcher ──────────────────────────────────────────────────────
 async function fetchWarmupCandles(symbol: string, isIntraday = true): Promise<any[]> {
-  const upper = symbol.toUpperCase().trim();
-  const ticker = upper.includes('.') ? upper : `${upper}.NS`;
+  const ticker = toYahooTicker(symbol);
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;
+
 
   // 1m for intraday (5 days of history provides ~1800 candles, plenty for 200 warmup)
   // 1d for swing (1 year of history provides ~250 candles)

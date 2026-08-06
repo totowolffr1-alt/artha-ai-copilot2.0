@@ -26,6 +26,8 @@ import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/S
 import { TradeJournalService } from './tradeJournalService';
 import { executeSignal, onTradeExit } from './orderExecutionService';
 import axios from 'axios';
+import { toYahooTicker } from '../utils/yahooMapper';
+
 
 // Singleton instance variables
 let _adapter: any = null;
@@ -165,8 +167,7 @@ async function pollYahooFinancePrices() {
 
   for (const symbol of symbols) {
     try {
-      const upper = symbol.toUpperCase().trim();
-      const ticker = upper.includes('.') ? upper : `${upper}.NS`;
+      const ticker = toYahooTicker(symbol);
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;
 
       const { data } = await axios.get(url, {
@@ -181,7 +182,19 @@ async function pollYahooFinancePrices() {
       const volume = meta?.regularMarketVolume || 0;
 
       if (price) {
-        handleIncomingTick(symbol, price, Math.floor(volume / 390)); // proxy delta volume per minute
+        // Emit TICK_RECEIVED on event bus to update UI stream and latestTicks cache in real-time
+        if (_bus) {
+          _bus.emit({
+            type: 'TICK_RECEIVED',
+            tick: {
+              symbol: symbol.toUpperCase(),
+              exchange: 'NSE',
+              price,
+              volume: Math.floor(volume / 390),
+              timestamp: Date.now()
+            }
+          });
+        }
       }
     } catch (err: any) {
       console.warn(`[LiveMarket Fallback] Fetch failed for ${symbol}:`, err.message);
