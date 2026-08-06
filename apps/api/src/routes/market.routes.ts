@@ -237,32 +237,91 @@ marketRouter.get('/search', async (req: Request, res: Response) => {
   }
 });
 
-marketRouter.get('/watchlist', (_req: Request, res: Response) => {
-  const watchlist = [
-    { ticker: 'RELIANCE', exchange: 'NSE' },
-    { ticker: 'TCS', exchange: 'NSE' },
-    { ticker: 'INFY', exchange: 'NSE' },
-    { ticker: 'CUPID', exchange: 'NSE' },
-    { ticker: 'ZOMATO', exchange: 'NSE' },
-    { ticker: 'SILVERBEES', exchange: 'NSE' },
-  ].map(item => {
-    const cached = latestTicks.get(item.ticker);
-    return {
-      ...item,
-      symbol: item.ticker,
-      price: cached?.price || BASE_PRICES[item.ticker] || (item.ticker === 'SILVERBEES' ? 344.44 : 100),
-      last_price: cached?.price || BASE_PRICES[item.ticker] || (item.ticker === 'SILVERBEES' ? 344.44 : 100),
-    };
-  });
-  res.json({ watchlist });
+marketRouter.get('/watchlist', async (_req: Request, res: Response) => {
+  const symbols = ['RELIANCE', 'TCS', 'INFY', 'CUPID', 'ZOMATO', 'SILVERBEES'];
+
+  const results = await Promise.all(symbols.map(async (symbol) => {
+    // 1. Use live WebSocket tick if available and fresh (< 5 minutes old)
+    const cached = latestTicks.get(symbol);
+    const isTickFresh = cached && (Date.now() - new Date(cached.timestamp).getTime()) < 5 * 60 * 1000;
+    if (isTickFresh && cached) {
+      return { symbol, exchange: 'NSE', price: cached.price, last_price: cached.price };
+    }
+
+    // 2. Fetch fresh price from Yahoo Finance (works after hours too)
+    try {
+      const ticker = toYahooTicker(symbol);
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5d`;
+      const { data } = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 4000,
+      });
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (meta) {
+        const price = parseFloat((meta.regularMarketPrice || meta.previousClose || BASE_PRICES[symbol] || 100).toFixed(2));
+        // Update tick cache
+        latestTicks.set(symbol, { symbol, exchange: 'NSE', price, timestamp: new Date().toISOString() });
+        return { symbol, exchange: 'NSE', ticker: symbol, price, last_price: price };
+      }
+    } catch { /* fall through to static fallback */ }
+
+    // 3. Last resort: static fallback price
+    const fallback = BASE_PRICES[symbol] || 100;
+    return { symbol, exchange: 'NSE', ticker: symbol, price: fallback, last_price: fallback };
+  }));
+
+  res.json({ watchlist: results });
 });
 
+// ── Last-resort static fallback prices (only used if Yahoo Finance AND WebSocket both fail) ──
 const BASE_PRICES: Record<string, number> = {
   RELIANCE: 2880, TCS: 3600, INFY: 1590, HDFCBANK: 1330, ICICIBANK: 1240,
   WIPRO: 540, TATAMOTORS: 960, SBIN: 820, BAJFINANCE: 7200, ZOMATO: 265,
   PAYTM: 880, CUPID: 215, KPITTECH: 1680, BANDHANBNK: 210, IRCTC: 880,
   ADANIPORTS: 1340, SUNPHARMA: 1720, ASIANPAINT: 2450, TITAN: 3300,
+  SILVERBEES: 105, HDFCLIFE: 680, LTIM: 5200, HCLTECH: 1650,
 };
+
+// ── Seed latestTicks with real Yahoo Finance closing prices on startup ────────
+const WATCHLIST_SYMBOLS = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'CUPID', 'ZOMATO', 'SILVERBEES'];
+
+async function seedPricesFromYahoo(): Promise<void> {
+  for (const symbol of WATCHLIST_SYMBOLS) {
+    try {
+      const ticker = toYahooTicker(symbol);
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5d`;
+      const { data } = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 5000,
+      });
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (meta) {
+        const price = meta.regularMarketPrice || meta.previousClose || BASE_PRICES[symbol] || 100;
+        latestTicks.set(symbol, {
+          symbol,
+          exchange: 'NSE',
+          price: parseFloat(price.toFixed(2)),
+          timestamp: new Date().toISOString(),
+        });
+        console.log(`[MarketSeeder] ✅ ${symbol}: ₹${price.toFixed(2)}`);
+      }
+    } catch (err: any) {
+      console.warn(`[MarketSeeder] ⚠️ ${symbol} fallback to static price: ${err.message}`);
+      if (!latestTicks.has(symbol)) {
+        latestTicks.set(symbol, {
+          symbol,
+          exchange: 'NSE',
+          price: BASE_PRICES[symbol] || 100,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+  }
+}
+
+// Run immediately on startup and refresh every 10 minutes
+seedPricesFromYahoo();
+setInterval(seedPricesFromYahoo, 10 * 60 * 1000);
 
 // Cache to avoid spamming Yahoo Finance chart API within a short timeframe
 const quotesCache = new Map<string, { quote: any; fetchedAt: number }>();
