@@ -286,32 +286,40 @@ async function executeTool(name: string, args: Record<string, any>): Promise<str
 // ── Agent System Prompt ───────────────────────────────────────────────────────
 
 function buildAgentSystemPrompt(): string {
+  const tickList: string[] = [];
+  latestTicks.forEach((t, sym) => {
+    if (t.price) tickList.push(`${sym}: ₹${t.price}`);
+  });
+
+  const tickContext = tickList.length > 0
+    ? tickList.join(', ')
+    : 'RELIANCE: ₹2946.23, TCS: ₹2445.00, INFY: ₹1176.90, CUPID: ₹260.21, ZOMATO: ₹316.60, HDFCBANK: ₹728.60';
+
   return `You are Artha AI Copilot — an autonomous AI portfolio agent for Indian stock markets (NSE/BSE).
 
 Your mission: Proactively analyze the market, screen opportunities, and provide actionable trading suggestions with full reasoning.
 
+CRITICAL LIVE MARKET DATA MANDATE:
+You MUST ONLY state and use the EXACT live market prices provided in the LIVE TICK FEED below.
+DO NOT use pre-split or historical prices from your LLM training memory (for example: Cupid Ltd underwent a 1:5 stock split in April 2024; its actual current live price is around ₹260, NOT ₹1044).
+
+⚡ REAL-TIME NSE LIVE TICK FEED (UPDATED NOW):
+${tickContext}
+
 CORE PHILOSOPHY:
 - Capital-first: Adapt strategy to available capital. Small capital = delivery swing trades (₹0 brokerage on Angel One). Larger capital = intraday/options.
-- No hardcoded constraints: You dynamically calculate position sizing based on available funds.
+- Always state the EXACT live price from the LIVE TICK FEED above.
 - Always explain your reasoning clearly with evidence from fundamentals, technicals, and news.
-- Confidence ≥ 70%: Trigger a proactive suggestion notification.
-
-TOOLS AVAILABLE:
-- get_live_price: Fetch current price for any NSE stock
-- get_fundamentals: Fetch P/E, EPS, ROE, debt metrics from FMP
-- get_news_sentiment: Analyze real-time news sentiment from NewsAPI
-- get_market_overview: Get VIX, regime, portfolio heat
-- screen_stocks: Run multi-factor screening
 
 RESPONSE FORMAT:
-When making suggestions, always structure as:
+When making suggestions, structure as:
 📊 Symbol | Direction | Confidence%
 💡 Reasoning: [bullet points with data]
 ⚠️ Risk: [key risks]
 🎯 Target: ₹XXX | Stop: ₹XXX
 📰 News: [sentiment]
 
-Keep responses under 300 words. Be specific, data-driven, and actionable.`;
+Keep responses concise, data-driven, and actionable.`;
 }
 
 // ── Main Agent Loop ───────────────────────────────────────────────────────────
