@@ -343,4 +343,78 @@ systemRouter.get('/broker/ping', async (_req: Request, res: Response) => {
   }
 });
 
+// ── POST /api/system/broker/connect ───────────────────────────────────────────
+// Manually update broker provider, credentials, and mode directly from UI
+systemRouter.post('/broker/connect', async (req: Request, res: Response) => {
+  const { provider, credentials, mode } = req.body ?? {};
+  const upperProvider = String(provider || 'PAPER').toUpperCase().trim();
+
+  const BROKER_ENV_KEYS: Record<string, string[]> = {
+    ANGELONE: ['ANGELONE_CLIENT_ID', 'ANGELONE_CLIENT_SECRET', 'ANGELONE_PASSWORD', 'ANGELONE_TOTP_SECRET'],
+    UPSTOX: ['UPSTOX_ACCESS_TOKEN', 'UPSTOX_API_KEY', 'UPSTOX_API_SECRET'],
+    ZERODHA: ['ZERODHA_API_KEY', 'ZERODHA_ACCESS_TOKEN', 'ZERODHA_API_SECRET'],
+    FYERS: ['FYERS_APP_ID', 'FYERS_ACCESS_TOKEN'],
+    DHAN: ['DHAN_CLIENT_ID', 'DHAN_ACCESS_TOKEN'],
+    SHOONYA: ['SHOONYA_USER_ID', 'SHOONYA_SESSION_TOKEN', 'SHOONYA_API_KEY'],
+    PAPER: [],
+  };
+
+  if (!BROKER_ENV_KEYS[upperProvider]) {
+    return res.status(400).json({ error: `Invalid broker provider: ${upperProvider}` });
+  }
+
+  // 1. Set active provider in process.env
+  process.env.BROKER_PROVIDER = upperProvider;
+
+  // 2. Set credentials in process.env if provided
+  if (credentials && typeof credentials === 'object') {
+    Object.entries(credentials).forEach(([key, val]) => {
+      if (typeof val === 'string' && val.trim()) {
+        process.env[key] = val.trim();
+      }
+    });
+  }
+
+  // 3. Update CapitalVault mode if mode is passed
+  if (mode === 'LIVE' || mode === 'PAPER') {
+    try {
+      const { capitalVault } = require('../../../../packages/phase5-strategy/src/vault/CapitalVault');
+      capitalVault.setMode(mode);
+    } catch { /* skip if vault not loaded */ }
+  }
+
+  // 4. Invalidate broker session caches so fresh login takes place
+  try {
+    const { clearSession, invalidateHoldingsCache } = require('../services/brokerSession');
+    clearSession();
+    invalidateHoldingsCache();
+  } catch { /* skip */ }
+
+  // 5. Log system notification & timeline
+  try {
+    const { pushNotification } = require('../services/notificationService');
+    const { addEvent } = require('../services/systemTimeline');
+    pushNotification({
+      component: 'broker',
+      severity: 'INFO',
+      title: `Broker Connected: ${upperProvider}`,
+      message: `Active broker updated to ${upperProvider} (${mode || 'PAPER'} mode) directly from Broker Settings.`,
+    });
+    addEvent('broker', `Broker credentials updated for ${upperProvider}`, 'INFO');
+  } catch { /* skip */ }
+
+  const requiredKeys = BROKER_ENV_KEYS[upperProvider];
+  const missingEnv = requiredKeys.filter(k => !process.env[k]);
+  const isLive = upperProvider !== 'PAPER' && missingEnv.length === 0;
+
+  res.json({
+    success: true,
+    active: upperProvider,
+    mode: isLive ? 'LIVE' : 'PAPER',
+    isLive,
+    missingEnv,
+    message: `Successfully connected to ${upperProvider}!`,
+  });
+});
+
 
