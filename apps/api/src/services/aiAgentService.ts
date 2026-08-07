@@ -14,14 +14,25 @@ import { getFundamentals } from './fmpService';
 import { getCachedHoldings } from './brokerSession';
 import { latestTicks } from '../routes/market.routes';
 import { toYahooTicker } from '../utils/yahooMapper';
+import { SignalEngine } from '../../../../packages/phase5-strategy/src/signals/SignalEngine';
+import { capitalVault } from '../../../../packages/phase5-strategy/src/vault/CapitalVault';
+import { RiskGuardian } from '../../../../packages/phase5-strategy/src/vault/RiskGuardian';
+import { getSandboxSummary, MICRO_SANDBOX, MACRO_SANDBOX } from './dualSandboxEngine';
+
+// Shared RiskGuardian instance backed by the global capitalVault
+const riskGuardian = new RiskGuardian(capitalVault);
 
 // Human-readable labels for each tool (shown in UI Tool Log)
 const TOOL_LABELS: Record<string, string> = {
-  get_live_price:      '📈 Checked live price',
-  get_fundamentals:    '📊 Fetched fundamentals (P/E, EPS, ROE)',
-  get_news_sentiment:  '📰 Analyzed news sentiment',
-  get_market_overview: '🌐 Retrieved market overview',
-  screen_stocks:       '🔍 Screened stocks for opportunities',
+  get_live_price:           '📈 Checked live price',
+  get_fundamentals:         '📊 Fetched fundamentals (P/E, EPS, ROE)',
+  get_news_sentiment:       '📰 Analyzed news sentiment',
+  get_market_overview:      '🌐 Retrieved market overview',
+  screen_stocks:            '🔍 Screened stocks for opportunities',
+  get_technical_signal:     '📡 Ran SignalEngine (RSI/MACD/EMA)',
+  get_capital_status:       '💰 Read CapitalVault status',
+  get_risk_status:          '🛡️ Checked RiskGuardian report',
+  get_sandbox_performance:  '🧪 Read Dual Sandbox performance',
 };
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? '';
@@ -124,6 +135,32 @@ const tools: FunctionDeclaration[] = [
       },
       required: ['strategy'],
     },
+  },
+  {
+    name: 'get_technical_signal',
+    description: 'Run the proprietary SignalEngine on any NSE stock. Returns RSI, MACD, EMA crossover, regime classification, confidence score, and recommended entry/stop/target prices.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        symbol: { type: SchemaType.STRING, description: 'NSE stock symbol e.g. YESBANK, RELIANCE, TCS' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_capital_status',
+    description: 'Read current CapitalVault status: available capital, allocated capital, mode (PAPER/LIVE), total P&L, drawdown, vault state.',
+    parameters: { type: SchemaType.OBJECT, properties: {}, required: [] },
+  },
+  {
+    name: 'get_risk_status',
+    description: 'Read RiskGuardian risk report: open position count, consecutive loss streak, circuit breaker cooldown, kill switch status.',
+    parameters: { type: SchemaType.OBJECT, properties: {}, required: [] },
+  },
+  {
+    name: 'get_sandbox_performance',
+    description: 'Read Dual Sandbox performance metrics: Micro sandbox (₹2,000 capital) and Macro sandbox (₹1,00,000 capital) — P&L, win rate, total trades, drawdown.',
+    parameters: { type: SchemaType.OBJECT, properties: {}, required: [] },
   },
 ];
 
@@ -273,6 +310,131 @@ async function executeTool(name: string, args: Record<string, any>): Promise<str
 
         const filtered = results.filter(Boolean).sort((a: any, b: any) => b.score - a.score);
         return JSON.stringify({ opportunities: filtered, strategy, screened: watchlist.length });
+      }
+
+      // ── Engine Tools ─────────────────────────────────────────────────────────
+
+      case 'get_technical_signal': {
+        const { symbol } = args;
+        const upperSymbol = String(symbol).toUpperCase().trim();
+
+        // Fetch 60 days of daily OHLCV from Yahoo Finance to feed the SignalEngine
+        const ticker = toYahooTicker(upperSymbol);
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=60d`;
+        const { data } = await axios.get(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          timeout: 6000,
+          proxy: false,
+        });
+
+        const result = data?.chart?.result?.[0];
+        if (!result) return JSON.stringify({ error: `No OHLCV data for ${upperSymbol}` });
+
+        const { timestamp: timestamps, indicators } = result;
+        const quote = indicators?.quote?.[0];
+        if (!timestamps || !quote) return JSON.stringify({ error: `Incomplete OHLCV for ${upperSymbol}` });
+
+        const engine = new SignalEngine();
+        engine.setPortfolioEquity(capitalVault.getAvailableCapital() || 10000);
+        let lastSignal: any = null;
+
+        for (let i = 0; i < timestamps.length; i++) {
+          const open   = quote.open?.[i];
+          const high   = quote.high?.[i];
+          const low    = quote.low?.[i];
+          const close  = quote.close?.[i];
+          const volume = quote.volume?.[i];
+          if (!open || !high || !low || !close) continue;
+
+          const signal = engine.processBar(
+            upperSymbol, open, high, low, close, volume ?? 0,
+            new Date(timestamps[i] * 1000)
+          );
+          if (signal) lastSignal = signal;
+        }
+
+        if (!lastSignal) {
+          // Return indicator snapshot even if no trade signal fired
+          return JSON.stringify({
+            symbol: upperSymbol,
+            signal: 'HOLD',
+            confidence: 0,
+            message: 'Indicators warming up — not enough data for a strong signal yet. Use fundamentals and sentiment.',
+          });
+        }
+
+        return JSON.stringify({
+          symbol: upperSymbol,
+          signal: lastSignal.direction,           // BUY / SELL
+          confidence: lastSignal.confidence,       // 0–100
+          strength: lastSignal.strength,           // STRONG / MODERATE / WEAK
+          regime: lastSignal.regime,               // TRENDING_UP / TRENDING_DOWN / SIDEWAYS etc.
+          entryPrice: lastSignal.entryPrice,
+          stopLoss: lastSignal.stopLoss,
+          takeProfit: lastSignal.takeProfit,
+          recommendedQty: lastSignal.recommendedQty,
+          riskAmount: lastSignal.riskAmount,
+          indicators: lastSignal.indicators,       // RSI, MACD, EMA, BB values
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      case 'get_capital_status': {
+        const status = capitalVault.getStatus();
+        return JSON.stringify({
+          allocatedCapital: status.allocatedCapital,
+          availableCapital: status.availableCapital,
+          deployedCapital: status.deployedCapital,
+          mode: status.mode,
+          state: status.state,
+          totalPnL: status.totalPnL,
+          todayPnL: status.todayPnL,
+          drawdownFromPeak: status.drawdownFromPeak,
+          maxPositionSize: capitalVault.getMaxPositionSize(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      case 'get_risk_status': {
+        const report = riskGuardian.getRiskReport();
+        return JSON.stringify({
+          openPositions: report.openPositionCount,
+          consecutiveLosses: report.consecutiveLosses,
+          cooldownRemainingMs: report.cooldownRemainingMs,
+          cooldownRemainingMin: Math.ceil((report.cooldownRemainingMs ?? 0) / 60000),
+          circuitBreakerActive: report.cooldownActive,
+          vaultState: report.vaultState,
+          drawdownFromPeak: report.drawdownFromPeak,
+          todayLossAmount: report.todayLossAmount,
+          dailyLossLimit: report.dailyLossLimit,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      case 'get_sandbox_performance': {
+        const micro = getSandboxSummary(MICRO_SANDBOX);
+        const macro = getSandboxSummary(MACRO_SANDBOX);
+        return JSON.stringify({
+          micro: {
+            label: 'Micro Sandbox (₹2,000)',
+            currentCapital: micro.currentCapital,
+            totalPnL: micro.totalPnL,
+            winRate: micro.winRate,
+            totalTrades: micro.totalTrades,
+            maxDrawdown: micro.maxDrawdown,
+            availableCash: micro.availableCash,
+          },
+          macro: {
+            label: 'Macro Sandbox (₹1,00,000)',
+            currentCapital: macro.currentCapital,
+            totalPnL: macro.totalPnL,
+            winRate: macro.winRate,
+            totalTrades: macro.totalTrades,
+            maxDrawdown: macro.maxDrawdown,
+            availableCash: macro.availableCash,
+          },
+          timestamp: new Date().toISOString(),
+        });
       }
 
       default:
