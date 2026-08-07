@@ -172,8 +172,9 @@ async function pollYahooFinancePrices() {
 
       const { data } = await axios.get(url, {
         params: { range: '1d', interval: '1m' },
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        timeout: 4000
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 6000,
+        proxy: false, // bypass any HTTPS_PROXY env var that may be set on cloud hosts
       });
 
       const result = data?.chart?.result?.[0];

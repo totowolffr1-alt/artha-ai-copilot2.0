@@ -166,6 +166,42 @@ function StockRow({ stock, quote, isSelected, isMobile, onSelect, onRemove, onPi
   );
 }
 
+// Client-side Yahoo Finance quote fetcher to bypass cloud server IP blocks
+async function fetchYahooQuoteClient(symbol: string): Promise<Quote | null> {
+  const upper = symbol.toUpperCase().trim();
+  // ZOMATO is represented as ETERNAL.NS on Yahoo Finance
+  const yahooTicker = upper === 'ZOMATO' ? 'ETERNAL.NS' : (upper.includes('.') ? upper : `${upper}.NS`);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooTicker}?interval=1d&range=5d`;
+  
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    const meta = json?.chart?.result?.[0]?.meta;
+    if (meta) {
+      const base = BASE_PRICES[upper] || 200;
+      const ltp = meta.regularMarketPrice || meta.previousClose || base;
+      const prevClose = meta.chartPreviousClose || meta.previousClose || base;
+      const change = ltp - prevClose;
+      const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      
+      return {
+        symbol: upper,
+        ltp: parseFloat(ltp.toFixed(2)),
+        open: parseFloat((meta.regularMarketOpen || prevClose).toFixed(2)),
+        high: parseFloat((meta.regularMarketDayHigh || ltp).toFixed(2)),
+        low: parseFloat((meta.regularMarketDayLow || ltp).toFixed(2)),
+        prevClose: parseFloat(prevClose.toFixed(2)),
+        change: parseFloat(change.toFixed(2)),
+        changePct: parseFloat(changePct.toFixed(2)),
+        volume: meta.regularMarketVolume || 10000,
+      };
+    }
+  } catch (err) {
+    console.warn(`[Client Yahoo Quote] Failed for ${symbol}:`, err);
+  }
+  return null;
+}
+
 // ── Main Watchlist Page ───────────────────────────────────────────────────────
 export default function Watchlist() {
   const [lists, setLists] = useState<Watchlist[]>(watchlistStore.getAll());
@@ -208,15 +244,51 @@ export default function Watchlist() {
       try {
         const res = await fetch(`${BASE}/market/quotes?symbols=${allSymbols.join(',')}`);
         const data = await res.json();
+        
+        const newQuotes: Record<string, Quote> = {};
+        const symbolsToFetchOnClient: string[] = [];
+
         if (data.quotes) {
-          const newQuotes: Record<string, Quote> = {};
           data.quotes.forEach((q: Quote) => {
-            newQuotes[q.symbol] = q;
+            // If backend returned static fallback due to rate limits/blocking,
+            // queue it for client-side direct fetch.
+            const isStaleFallback = q.change === 0 && q.ltp === BASE_PRICES[q.symbol];
+            if (isStaleFallback) {
+              symbolsToFetchOnClient.push(q.symbol);
+            } else {
+              newQuotes[q.symbol] = q;
+            }
           });
-          setQuotes(prev => ({ ...prev, ...newQuotes }));
+          
+          if (Object.keys(newQuotes).length > 0) {
+            setQuotes(prev => ({ ...prev, ...newQuotes }));
+          }
+        } else {
+          symbolsToFetchOnClient.push(...allSymbols);
+        }
+
+        // Fetch failed/blocked symbols directly from client browser
+        if (symbolsToFetchOnClient.length > 0) {
+          const clientQuotes = await Promise.all(
+            symbolsToFetchOnClient.map(s => fetchYahooQuoteClient(s))
+          );
+          const clientQuotesMap: Record<string, Quote> = {};
+          clientQuotes.forEach(q => {
+            if (q) clientQuotesMap[q.symbol] = q;
+          });
+          if (Object.keys(clientQuotesMap).length > 0) {
+            setQuotes(prev => ({ ...prev, ...clientQuotesMap }));
+          }
         }
       } catch (err) {
         console.error('Failed to fetch real quotes:', err);
+        // Direct fallback client fetch for everything
+        const clientQuotes = await Promise.all(allSymbols.map(s => fetchYahooQuoteClient(s)));
+        const clientQuotesMap: Record<string, Quote> = {};
+        clientQuotes.forEach(q => {
+          if (q) clientQuotesMap[q.symbol] = q;
+        });
+        setQuotes(prev => ({ ...prev, ...clientQuotesMap }));
       }
     };
 

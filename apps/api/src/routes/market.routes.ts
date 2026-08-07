@@ -4,6 +4,10 @@ import type { IEventBus } from '../../../../packages/phase2-market-data/src/mark
 import type { MockMarketDataAdapter } from '../../../../packages/phase2-market-data/src/marketData/adapters/mock/MockAdapter';
 import { toYahooTicker } from '../utils/yahooMapper';
 
+// Disable proxy for all axios calls in this file.
+// Cloud hosts (Railway) may set HTTPS_PROXY env vars that break direct Yahoo Finance connections.
+(axios.defaults as any).proxy = false;
+
 export const marketRouter = Router();
 
 let sharedBus: IEventBus | null = null;

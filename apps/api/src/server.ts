@@ -9,6 +9,17 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') }); // prod mo
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
+// ── CRITICAL: Clear any proxy env vars set on the cloud host (Railway/Heroku) ──
+// Broken HTTPS_PROXY (e.g. socks.webshare.io) causes ALL axios requests to fail.
+// This app connects directly to Yahoo Finance and Angel One — no proxy needed.
+delete process.env.HTTPS_PROXY;
+delete process.env.HTTP_PROXY;
+delete process.env.https_proxy;
+delete process.env.http_proxy;
+delete process.env.ALL_PROXY;
+delete process.env.all_proxy;
+console.log('[Server] ✅ Proxy env vars cleared — direct connections only.');
+
 
 import { SimpleEventBus } from '../../../packages/phase2-market-data/src/marketData/SimpleEventBus';
 import { MockMarketDataAdapter } from '../../../packages/phase2-market-data/src/marketData/adapters/mock/MockAdapter';

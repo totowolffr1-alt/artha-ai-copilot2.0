@@ -1,0 +1,255 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>Artha AI Copilot 2.0 — System Architecture & Design Theory</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+  <w:View>Print</w:View>
+  <w:Zoom>100</w:Zoom>
+  <w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 11.5pt;
+    line-height: 1.6;
+    color: #1e293b;
+    margin: 1in;
+  }
+  h1 {
+    font-family: 'Georgia', serif;
+    font-size: 26pt;
+    color: #1e3a8a;
+    border-bottom: 3px solid #3b82f6;
+    padding-bottom: 8px;
+    margin-top: 30pt;
+    margin-bottom: 12pt;
+  }
+  h2 {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 18pt;
+    color: #2563eb;
+    margin-top: 24pt;
+    margin-bottom: 10pt;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 4px;
+  }
+  h3 {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14pt;
+    color: #1e1b4b;
+    margin-top: 18pt;
+    margin-bottom: 8pt;
+  }
+  p {
+    margin-bottom: 12pt;
+    text-align: justify;
+  }
+  ul, ol {
+    margin-bottom: 12pt;
+    margin-left: 24pt;
+  }
+  li {
+    margin-bottom: 6pt;
+  }
+  .highlight-box {
+    background-color: #f8fafc;
+    border-left: 4px solid #3b82f6;
+    padding: 12px 18px;
+    margin: 18px 0;
+    border-radius: 4px;
+  }
+  .highlight-title {
+    font-weight: bold;
+    color: #1e3a8a;
+    margin-bottom: 4px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+    font-size: 10.5pt;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: bold;
+    color: #0f172a;
+  }
+  .footer {
+    margin-top: 40pt;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 10px;
+    font-size: 9pt;
+    color: #64748b;
+    text-align: center;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+</style>
+</head>
+<body>
+
+  <!-- TITLE PAGE -->
+  <div style="text-align: center; padding-top: 50pt; padding-bottom: 80pt;">
+    <h1 style="border: none; color: #1e3a8a; font-size: 32pt; margin-bottom: 10pt;">ARTHA AI COPILOT 2.0</h1>
+    <h3 style="color: #4b5563; font-weight: normal; font-size: 18pt; margin-bottom: 40pt;">System Architecture & Design Theory</h3>
+    <div style="margin: 80pt 0 40pt 0; font-size: 12pt; color: #475569; line-height: 1.8;">
+      <strong>Author:</strong> Artha Engineering Group<br>
+      <strong>Framework Phase:</strong> Phase 8 (Autonomous Learning Integration)<br>
+      <strong>Target Model:</strong> B2B Institutional Deployments<br>
+      <strong>Date:</strong> August 6, 2026
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 1 -->
+  <h2>1. Executive Summary & Core Mission</h2>
+  <p>
+    Artha AI Copilot 2.0 is an intelligent decision-support and trade execution system designed to bridge the gap between retail brokers and institutional-grade quant strategy execution. In traditional trading systems, risk management and position sizing are often treated as static inputs. Artha AI introduces a human-in-the-loop autonomous agent that actively balances available capital, current market volatility, and long-term risk profiles to optimize executions.
+  </p>
+  <p>
+    The core philosophy of Artha AI is <strong>non-custodial capital protection</strong>. The platform does not hold user funds. Instead, it operates directly as a "copilot" over existing brokerage accounts (such as Angel One SmartAPI), executing trades only within pre-approved parameters set by the user in the Capital Vault.
+  </p>
+
+  <div class="highlight-box">
+    <div class="highlight-title">💡 Core Paradigm Shift: Guardrails Over Black-Box Automation</div>
+    Instead of trusting an AI to trade freely with no boundaries, Artha AI enforces a strict multi-layer sandbox. The AI proposes actions based on dynamic market reading, but execution is verified against hardcoded risk formulas (e.g., maximum drawdown limits, circuit breakers) before hitting any exchange.
+  </div>
+
+  <!-- SECTION 2 -->
+  <h2>2. System Architecture Paradigms</h2>
+  <p>
+    The system is organized around three central operational paradigms that ensure code safety, regulatory compliance, and system durability:
+  </p>
+
+  <h3>2.1 The Hybrid Copilot Paradigm</h3>
+  <p>
+    Unlike fully automated black-box trading bots that execute trades silently in the background, Artha AI operates as a <strong>hybrid copilot</strong>. It categorizes orders based on trade size and confidence levels:
+  </p>
+  <ul>
+    <li><strong>Fully Autonomous Execution:</strong> Lower-value trades that fall within daily risk parameters are routed and executed immediately to capture short-term setups.</li>
+    <li><strong>Human-in-the-Loop Gatekeeping:</strong> Any trade exceeding the daily risk threshold (defaulting to ₹5,000) or displaying low confidence is held in an approval queue. The user receives a real-time push notification and must manually authorize the trade on the dashboard before it is placed.</li>
+  </ul>
+
+  <h3>2.2 The Dual-Sandbox Paradigm (Paper vs. Live)</h3>
+  <p>
+    To eliminate onboarding friction and enable safe mathematical validation, the application divides execution into two isolated sandboxes:
+  </p>
+  <ol>
+    <li><strong>Paper Trading Sandbox:</strong> A fully local, deterministic simulation. It bypasses external broker API calls and simulates order execution internally based on actual market closing prices. It allows users to stress-test indicators and verify the AI's logic without risking capital.</li>
+    <li><strong>Live Broker Sandbox:</strong> A secure API tunnel to registered brokers (such as Angel One SmartAPI). The system handles session management, JWT token maintenance, and dynamic IP extraction to allow seamless live trading.</li>
+  </ol>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 3 -->
+  <h2>3. The Dual Learning Engine (Micro & Macro)</h2>
+  <p>
+    The AI system is powered by two distinct levels of machine learning. This dual-learning structure ensures that the system excels both at executing individual trades and at protecting the overall portfolio.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Learning Type</th>
+        <th style="width: 40%;">What it Learns (Principles)</th>
+        <th style="width: 40%;">How it Applies (Functions)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Micro-Learning</strong><br>(Execution Level)</td>
+        <td>Analyzes short-term price fluctuations, asset-specific volatility, and immediate order book slippage. It focuses on the "micro" details of a single stock.</td>
+        <td>
+          <ul>
+            <li>Calculates the Average True Range (ATR) to dynamically size stop losses.</li>
+            <li>Adjusts order quantities to match current liquidity, preventing slippage costs.</li>
+            <li>Identifies short-term entry zones using momentum indicators (RSI, MACD).</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Macro-Learning</strong><br>(Portfolio Level)</td>
+        <td>Analyzes broad market regimes (e.g., Bull Market vs. Sideways Congestion), overall portfolio drawdowns, and capital compounding behaviors.</td>
+        <td>
+          <ul>
+            <li>Scales down position sizes during high-volatility market regimes.</li>
+            <li>Enforces portfolio-wide drawdown stops (suspends trading if capital drops 15% from peak).</li>
+            <li>Reallocates free capital dynamically based on win rates.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3.1 Micro-Learning Implementation</h3>
+  <p>
+    For individual trades, the system needs capital inputs to size entries. When you allocate capital (e.g., ₹5,000) to the Copilot, the Micro-learning engine calculates the maximum allowable loss per trade. It reads the stock's ATR over the last 14 candles to compute a buffer. If the stock is highly volatile, the engine scales down the quantity automatically so that a stop-loss hit never loses more than 1% of your allotted capital.
+  </p>
+
+  <h3>3.2 Macro-Learning Implementation</h3>
+  <p>
+    At the macro level, the system tracks the cumulative equity curve. It uses the total allotted vault capital to compute risk metrics like the Sharpe Ratio and maximum drawdown. If the overall portfolio suffers a consecutive series of losses, the Macro-learning engine activates a cooldown period, temporarily locking new entries to protect the rest of the capital pool.
+  </p>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 4 -->
+  <h2>4. Core Functional Domains</h2>
+  <p>
+    Artha AI is modularly divided into five logical domains, each managing a specific part of the system lifecycle:
+  </p>
+
+  <h3>Domain A: Market Intelligence & Ticks Engine</h3>
+  <p>
+    This domain is responsible for feeding high-speed market data into the system. It connects to the broker's WebSocket to receive live, tick-by-tick prices. If the WebSocket connection drops during market hours or if the market is closed, the engine automatically falls back to polling Yahoo Finance API. This guarantees that technical analysis indicators always have fresh data.
+  </p>
+
+  <h3>Domain B: Risk Guardian</h3>
+  <p>
+    The Risk Guardian acts as the gatekeeper. It reviews every proposed trade before it is sent for execution. It enforces rules such as maximum open positions (e.g., no more than 3 active trades at once), minimum indicator confidence levels, and consecutive loss cooldowns.
+  </p>
+
+  <h3>Domain C: Capital Vault</h3>
+  <p>
+    The Capital Vault manages the allocation of virtual and live capital. It handles capital reservation when a trade is opened, locking those funds so they cannot be double-spent by other strategies. When a trade closes, the Capital Vault releases the capital and adds or subtracts the net P&L. If compounding is enabled, it automatically reinvests the profits.
+  </p>
+
+  <h3>Domain D: Explainable AI (XAI) Advisor</h3>
+  <p>
+    Instead of just giving a binary "BUY" or "SELL" recommendation, the XAI Advisor builds an explainable decision chain. It breaks down the contribution of each technical indicator (RSI, MACD, Volume, 200 DMA) and explains why a specific signal was triggered, making it transparent for compliance officers and retail users alike.
+  </p>
+
+  <h3>Domain E: Self-Healing & Health Monitor</h3>
+  <p>
+    A critical requirement for B2B applications is high uptime. The Health Monitor performs automatic checks every 30 seconds on 10 separate backend modules (database connectivity, API keys, schedulers, etc.). If a critical service is detected as offline, the Self-Healing service automatically triggers recovery routines, such as restarting WebSocket listeners or invalidating stale caches.
+  </p>
+
+  <!-- SECTION 5 -->
+  <h2>5. Regulatory & Security Architecture</h2>
+  <p>
+    To prepare the platform for commercial licensing, the architecture implements several compliance guardrails:
+  </p>
+  <ul>
+    <li><strong>Client-Side Isolation:</strong> The database layer uses SQLite, keeping each B2B client's data isolated.</li>
+    <li><strong>IP Whitelisting & Secure Proxies:</strong> Connects to brokers via static outbound IP proxies to protect account sessions.</li>
+    <li><strong>Emergency Kill Switch:</strong> Allows users to instantly lock the Capital Vault and cancel all pending orders in one click.</li>
+  </ul>
+
+  <div class="footer">
+    Artha AI Copilot 2.0 Document • System Architecture Design Specification
+  </div>
+
+</body>
+</html>
