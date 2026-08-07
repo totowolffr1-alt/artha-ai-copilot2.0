@@ -76,16 +76,16 @@ export default function AIChat() {
         Tool-calling AI agent. Fetches live prices, fundamentals, news sentiment, and market data before every answer.
       </p>
 
-      <div style={{ display: 'flex', gap: 24 }}>
+      <div className="ai-chat-layout">
         {/* Main Chat Panel */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '680px' }} className="card">
+        <div className="card ai-chat-main-panel">
           {/* Scrollable messages */}
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 10 }}>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 6 }}>
             {messages.map((m, i) => {
               const isUser = m.role === 'user';
               return (
                 <div key={i} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: '80%' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: isUser ? '85%' : '92%' }}>
                     <div style={{ fontSize: 11, color: 'var(--muted)', alignSelf: isUser ? 'flex-end' : 'flex-start', padding: '0 4px' }}>
                       {isUser ? '👤 You' : '🤖 Artha AI'} · {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
@@ -121,6 +121,7 @@ export default function AIChat() {
                       fontSize: 14,
                       lineHeight: 1.6,
                       whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
                       border: isUser ? 'none' : '1px solid var(--border)',
                       boxShadow: isUser ? '0 4px 15px rgba(99,102,241,0.2)' : 'none',
                     }}>
@@ -170,23 +171,23 @@ export default function AIChat() {
           </div>
 
           {/* Chat input box */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 20, paddingTop: 15, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send(input)}
-              placeholder="Ask about any stock, your portfolio, or a trading strategy…"
-              style={{ flex: 1 }}
+              placeholder="Ask about any stock, your portfolio, or strategy…"
+              style={{ flex: 1, minWidth: 0 }}
               disabled={loading}
             />
-            <button onClick={() => send(input)} disabled={loading || !input.trim()}>
+            <button onClick={() => send(input)} disabled={loading || !input.trim()} style={{ whiteSpace: 'nowrap' }}>
               {loading ? '⏳' : 'Send ➤'}
             </button>
           </div>
         </div>
 
         {/* Sidebar */}
-        <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="ai-chat-side-panel">
           {/* Suggested Queries */}
           <div className="card" style={{ padding: 20 }}>
             <h4 style={{ color: '#fff', fontSize: 13, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
