@@ -60,20 +60,24 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
 
     // 3. Angel One Symbol Search API (real-time, no pre-download needed)
     try {
-      const searchRes = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/searchScrip', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-          'X-UserType': 'USER',
-          'X-SourceID': 'WEB',
-          'X-ClientIP': '127.0.0.1',
-          'X-MACAddress': '00-00-00-00-00-00',
-          'X-PrivateKey': this.clientSecret,
-        },
-        body: JSON.stringify({ exchange: 'NSE', searchscrip: symbol })
-      });
+          const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
+          const searchRes = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/searchScrip', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+              'X-UserType': 'USER',
+              'X-SourceID': 'WEB',
+              'X-ClientIP': clientIp,
+              'X-LocalIP': clientIp,
+              'clientlocalip': clientIp,
+              'clientpublicip': clientIp,
+              'X-MACAddress': '00-00-00-00-00-00',
+              'X-PrivateKey': this.clientSecret,
+            },
+            body: JSON.stringify({ exchange: 'NSE', searchscrip: symbol })
+          });
       const searchData = await searchRes.json() as any;
       if (searchData?.status === true && Array.isArray(searchData.data) && searchData.data.length > 0) {
         // Find exact match (prefer -EQ equity type)
@@ -125,6 +129,7 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
     }
 
     try {
+      const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
       const res = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/placeOrder', {
         method: 'POST',
         headers: {
@@ -133,7 +138,10 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
           'Authorization': `Bearer ${token}`,
           'X-UserType': 'USER',
           'X-SourceID': 'WEB',
-          'X-ClientIP': '127.0.0.1',
+          'X-ClientIP': clientIp,
+          'X-LocalIP': clientIp,
+          'clientlocalip': clientIp,
+          'clientpublicip': clientIp,
           'X-MACAddress': '00-00-00-00-00-00',
           'X-PrivateKey': this.clientSecret,
         },

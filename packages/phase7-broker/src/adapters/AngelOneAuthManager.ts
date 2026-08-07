@@ -46,6 +46,7 @@ export class AngelOneAuthManager {
       // Generate TOTP dynamically using RFC 6238 (30-second window, SHA-1, 6 digits)
       const totpCode = await this.generateTOTP(this.totpSecret);
 
+      const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
       const response = await fetch('https://apiconnect.angelbroking.com/rest/auth/angelbroking/user/v1/loginByPassword', {
         method: 'POST',
         headers: {
@@ -53,7 +54,10 @@ export class AngelOneAuthManager {
           'Accept': 'application/json',
           'X-UserType': 'USER',
           'X-SourceID': 'WEB',
-          'X-ClientIP': '127.0.0.1',
+          'X-ClientIP': clientIp,
+          'X-LocalIP': clientIp,
+          'clientlocalip': clientIp,
+          'clientpublicip': clientIp,
           'X-MACAddress': '00-00-00-00-00-00',
           'X-PrivateKey': this.clientSecret
         },
