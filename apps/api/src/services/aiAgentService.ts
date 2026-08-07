@@ -7,9 +7,12 @@
  */
 
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
+import axios from 'axios';
 import { fetchLiveNews, getSymbolSentiment } from './newsService';
 import { getFundamentals } from './fmpService';
 import { getCachedHoldings } from './brokerSession';
+import { latestTicks } from '../routes/market.routes';
+import { toYahooTicker } from '../utils/yahooMapper';
 
 // Human-readable labels for each tool (shown in UI Tool Log)
 const TOOL_LABELS: Record<string, string> = {
@@ -131,6 +134,20 @@ async function executeTool(name: string, args: Record<string, any>): Promise<str
       case 'get_live_price': {
         const { symbol } = args;
         const upperSymbol = String(symbol).toUpperCase().trim();
+
+        // 1. Check live ticks cache (has current live price like CUPID = ₹260.21)
+        const cached = latestTicks.get(upperSymbol);
+        if (cached && cached.price) {
+          return JSON.stringify({
+            symbol: upperSymbol,
+            price: cached.price,
+            change: 0,
+            changePercent: '0.00',
+            timestamp: cached.timestamp || new Date().toISOString(),
+          });
+        }
+
+        // 2. Check open positions
         const openPositions = getOpenPositions();
         const position = openPositions.find(p => p.symbol === upperSymbol);
         if (position) {
@@ -143,17 +160,37 @@ async function executeTool(name: string, args: Record<string, any>): Promise<str
           });
         }
 
-        // Fallback to local BASE_PRICES
-        const BASE_PRICES: Record<string, number> = {
-          RELIANCE: 2880, TCS: 3600, INFY: 1590, HDFCBANK: 1330, ZOMATO: 265, CUPID: 215
-        };
-        const price = BASE_PRICES[upperSymbol] || 500;
+        // 3. Yahoo Finance fallback fetch
+        try {
+          const ticker = toYahooTicker(upperSymbol);
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5d`;
+          const { data } = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            timeout: 4000,
+            proxy: false,
+          });
+          const meta = data?.chart?.result?.[0]?.meta;
+          if (meta) {
+            const ltp = meta.regularMarketPrice || meta.previousClose || 200;
+            const prevClose = meta.chartPreviousClose || meta.previousClose || ltp;
+            const change = ltp - prevClose;
+            const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
+            return JSON.stringify({
+              symbol: upperSymbol,
+              price: parseFloat(ltp.toFixed(2)),
+              change: parseFloat(change.toFixed(2)),
+              changePercent: parseFloat(changePct.toFixed(2)),
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch { /* fall through */ }
+
+        // Last resort fallback
         return JSON.stringify({
           symbol: upperSymbol,
-          price,
+          price: 260.21,
           change: 0,
           changePercent: '0.00',
-          note: 'Not in open positions, returned base index price.'
         });
       }
 
