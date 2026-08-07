@@ -7,6 +7,7 @@
  */
 
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import axios from 'axios';
 import { fetchLiveNews, getSymbolSentiment } from './newsService';
 import { getFundamentals } from './fmpService';
@@ -490,65 +491,87 @@ You can ask me:
 }
 
 export async function runAgentChat(userMessage: string): Promise<{ reply: string; suggestions: AgentSuggestion[]; toolsUsed: string[] }> {
-  const apiKey = (process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || '').trim();
+  const groqKey = (process.env.GROQ_API_KEY || '').trim();
+  const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
 
-  if (!apiKey) {
-    // Run smart autonomous tool fallback engine when no key is set!
-    return handleSmartFallbackResponse(userMessage);
-  }
+  // 1. Prefer Groq if GROQ_API_KEY is present
+  if (groqKey && groqKey.startsWith('gsk_')) {
+    try {
+      const groq = new Groq({ apiKey: groqKey });
+      const modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      systemInstruction: buildAgentSystemPrompt(),
-      tools: [{ functionDeclarations: tools }],
-    });
-
-    const chat = model.startChat({ history: [] });
-
-    let response = await chat.sendMessage(userMessage);
-    let candidate = response.response;
-
-    // Agentic loop — keep processing tool calls until done
-    let iterations = 0;
-    const MAX_ITERATIONS = 5;
-    const toolsUsed: string[] = []; // Track every tool the AI called
-
-    while (iterations < MAX_ITERATIONS) {
-      const calls = candidate.functionCalls();
-      if (!calls || calls.length === 0) break;
-
-      // Record which tools were called
-      calls.forEach(call => {
-        const label = TOOL_LABELS[call.name] ?? call.name;
-        if (!toolsUsed.includes(label)) toolsUsed.push(label);
+      const completion = await groq.chat.completions.create({
+        messages: [
+          { role: 'system', content: buildAgentSystemPrompt() },
+          { role: 'user', content: userMessage },
+        ],
+        model: modelName,
+        temperature: 0.2,
       });
 
-      // Execute all tool calls
-      const toolResults = await Promise.all(
-        calls.map(async call => ({
-          functionResponse: {
-            name: call.name,
-            response: { result: await executeTool(call.name, call.args as Record<string, any>) },
-          },
-        }))
-      );
-
-      // Send tool results back
-      response = await chat.sendMessage(toolResults as any);
-      candidate = response.response;
-      iterations++;
+      const replyText = completion.choices[0]?.message?.content || '';
+      const suggestions = parseSuggestions(replyText);
+      return { reply: replyText, suggestions, toolsUsed: ['🤖 Groq (LLaMA 3.3 70B)'] };
+    } catch (err: any) {
+      console.error('[AgentService] Groq SDK Error, falling back to smart tool engine:', err?.message ?? err);
+      return handleSmartFallbackResponse(userMessage);
     }
-
-    const replyText = candidate.text();
-    const suggestions = parseSuggestions(replyText);
-
-    return { reply: replyText, suggestions, toolsUsed };
-  } catch (err: any) {
-    console.error('[AgentService] LLM Error, falling back to smart engine:', err?.message ?? err);
-    return handleSmartFallbackResponse(userMessage);
   }
+
+  // 2. Use Gemini if GEMINI_API_KEY is present
+  if (geminiKey) {
+    try {
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-2.0-flash',
+        systemInstruction: buildAgentSystemPrompt(),
+        tools: [{ functionDeclarations: tools }],
+      });
+
+      const chat = model.startChat({ history: [] });
+
+      let response = await chat.sendMessage(userMessage);
+      let candidate = response.response;
+
+      let iterations = 0;
+      const MAX_ITERATIONS = 5;
+      const toolsUsed: string[] = [];
+
+      while (iterations < MAX_ITERATIONS) {
+        const calls = candidate.functionCalls();
+        if (!calls || calls.length === 0) break;
+
+        calls.forEach(call => {
+          const label = TOOL_LABELS[call.name] ?? call.name;
+          if (!toolsUsed.includes(label)) toolsUsed.push(label);
+        });
+
+        const toolResults = await Promise.all(
+          calls.map(async call => ({
+            functionResponse: {
+              name: call.name,
+              response: { result: await executeTool(call.name, call.args as Record<string, any>) },
+            },
+          }))
+        );
+
+        response = await chat.sendMessage(toolResults as any);
+        candidate = response.response;
+        iterations++;
+      }
+
+      const replyText = candidate.text();
+      const suggestions = parseSuggestions(replyText);
+
+      return { reply: replyText, suggestions, toolsUsed };
+    } catch (err: any) {
+      console.error('[AgentService] Gemini LLM Error, falling back to smart tool engine:', err?.message ?? err);
+      return handleSmartFallbackResponse(userMessage);
+    }
+  }
+
+  // 3. Fallback to smart local tool engine if no key is configured
+  return handleSmartFallbackResponse(userMessage);
 }
 
 // ── Proactive Screening ───────────────────────────────────────────────────────
