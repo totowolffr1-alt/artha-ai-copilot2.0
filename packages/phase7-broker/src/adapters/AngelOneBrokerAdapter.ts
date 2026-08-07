@@ -61,7 +61,7 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
     // 3. Angel One Symbol Search API (real-time, no pre-download needed)
     try {
           const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
-          const searchRes = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/searchScrip', {
+          const searchRes = await fetch('https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/searchScrip', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -130,7 +130,7 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
 
     try {
       const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
-      const res = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/placeOrder', {
+      const res = await fetch('https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/placeOrder', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -224,7 +224,7 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
     }
 
     try {
-      const res = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/cancelOrder', {
+      const res = await fetch('https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/cancelOrder', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -289,7 +289,7 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
     }
 
     try {
-      const res = await fetch(`https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/details/${ref.broker_order_id}`, {
+      const res = await fetch(`https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/details/${ref.broker_order_id}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -364,7 +364,7 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
       }
 
       try {
-        const res = await fetch('https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/getOrderBook', {
+        const res = await fetch('https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/getOrderBook', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

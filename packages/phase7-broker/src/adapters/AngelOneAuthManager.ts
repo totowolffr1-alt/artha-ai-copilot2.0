@@ -47,7 +47,7 @@ export class AngelOneAuthManager {
       const totpCode = await this.generateTOTP(this.totpSecret);
 
       const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
-      const response = await fetch('https://apiconnect.angelbroking.com/rest/auth/angelbroking/user/v1/loginByPassword', {
+      const response = await fetch('https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
