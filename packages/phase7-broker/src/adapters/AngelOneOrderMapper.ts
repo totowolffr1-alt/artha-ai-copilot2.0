@@ -50,14 +50,9 @@ export class AngelOneOrderMapper {
     if (req.product_type === 'CNC') producttype = 'DELIVERY';
     if (req.product_type === 'NRML') producttype = 'CARRYFORWARD';
 
-    // variety: SL order uses STOPLOSS variety; outside market hours uses AMO variety
-    const isClosed = isMarketClosedIST();
-    let variety: AngelOneOrderBody['variety'] = 'NORMAL';
-    if (req.order_type === 'SL' || req.order_type === 'SL-M') {
-      variety = 'STOPLOSS';
-    } else if (isClosed) {
-      variety = 'AMO';
-    }
+    // variety: SL order uses STOPLOSS variety, standard order uses NORMAL variety
+    const variety: AngelOneOrderBody['variety'] = 
+      (req.order_type === 'SL' || req.order_type === 'SL-M') ? 'STOPLOSS' : 'NORMAL';
 
     return {
       variety,
