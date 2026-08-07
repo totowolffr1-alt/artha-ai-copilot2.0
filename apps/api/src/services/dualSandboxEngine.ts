@@ -35,6 +35,8 @@ export interface SandboxTrade {
   thresholdReasoning: string;
   confidence?: number;
   sandbox: 'MICRO' | 'MACRO';
+  stopLoss?: number;
+  takeProfit?: number;
 }
 
 export interface SandboxState {
@@ -117,6 +119,8 @@ export function placeSandboxTrade(
   confidence?: number,
   vix = 15,
   regime = 'NEUTRAL',
+  stopLoss?: number,
+  takeProfit?: number,
 ): SandboxTrade {
 
   // Check if strategy is allowed in this sandbox
@@ -134,6 +138,8 @@ export function placeSandboxTrade(
       thresholdReasoning: 'Strategy blocked by sandbox config',
       confidence,
       sandbox: sandbox.id,
+      stopLoss,
+      takeProfit,
     };
     sandbox.trades.push(trade);
     return trade;
@@ -157,6 +163,8 @@ export function placeSandboxTrade(
       thresholdReasoning: threshold.reasoning,
       confidence,
       sandbox: sandbox.id,
+      stopLoss,
+      takeProfit,
     };
     sandbox.trades.push(trade);
     return trade;
@@ -175,6 +183,8 @@ export function placeSandboxTrade(
         thresholdReasoning: threshold.reasoning,
         confidence,
         sandbox: sandbox.id,
+        stopLoss,
+        takeProfit,
       };
       sandbox.trades.push(trade);
       return trade;
@@ -197,6 +207,8 @@ export function placeSandboxTrade(
     thresholdReasoning: threshold.reasoning,
     confidence,
     sandbox: sandbox.id,
+    stopLoss,
+    takeProfit,
   };
 
   // Update sandbox state

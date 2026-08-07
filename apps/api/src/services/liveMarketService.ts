@@ -101,6 +101,47 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
     }
   }
 
+  // 2. Tick SL/TP monitor for Dual Sandbox open positions (MICRO & MACRO)
+  try {
+    const { MICRO_SANDBOX, MACRO_SANDBOX, placeSandboxTrade } = require('./dualSandboxEngine');
+    [MICRO_SANDBOX, MACRO_SANDBOX].forEach(sandbox => {
+      const positions = [...sandbox.openPositions];
+      for (const pos of positions) {
+        if (pos.symbol !== symbol) continue;
+        
+        let shouldClose = false;
+        let exitReason = '';
+
+        if (pos.direction === 'BUY') {
+          if (pos.takeProfit && price >= pos.takeProfit) {
+            shouldClose = true;
+            exitReason = 'TP';
+          } else if (pos.stopLoss && price <= pos.stopLoss) {
+            shouldClose = true;
+            exitReason = 'SL';
+          }
+        }
+
+        if (shouldClose) {
+          console.log(`[Sandbox ${sandbox.id}] 🤖 Auto-closing position for ${symbol} via ${exitReason} @ ₹${price}`);
+          placeSandboxTrade(
+            sandbox,
+            symbol,
+            'SELL',
+            pos.qty,
+            price,
+            pos.strategy,
+            pos.confidence,
+            15,
+            'NEUTRAL'
+          );
+        }
+      }
+    });
+  } catch (err: any) {
+    console.warn('[LiveMarket] Sandbox tick monitor error:', err.message);
+  }
+
   // Aggregate into OHLC bar
   if (!openTracker[symbol]) {
     openTracker[symbol] = price;
@@ -141,6 +182,48 @@ export function handleIncomingTick(symbol: string, price: number, volume: number
 
         // Automatically execute trade via Order Execution Service (Risk Guardian + Vault)
         executeSignal(signal).catch(err => console.error('[LiveMarket] Order execution error:', err));
+
+        // ── AUTO-ROUTE SIGNAL TO DUAL SANDBOX ENGINE FOR COPILOT AUTO-PRACTICE ──
+        try {
+          const { placeSandboxTrade, MICRO_SANDBOX, MACRO_SANDBOX } = require('./dualSandboxEngine');
+          const directionMapped = signal.direction === 'LONG' ? 'BUY' : 'SELL';
+
+          // Route to Micro Sandbox using 'DELIVERY' strategy
+          if (MICRO_SANDBOX.allowedStrategies.includes('DELIVERY')) {
+            placeSandboxTrade(
+              MICRO_SANDBOX,
+              signal.symbol,
+              directionMapped,
+              signal.recommended_qty ?? 1,
+              signal.entry_price,
+              'DELIVERY',
+              signal.confidence,
+              15,
+              signal.regime,
+              signal.stop_loss,
+              signal.take_profit
+            );
+          }
+
+          // Route to Macro Sandbox using 'INTRADAY' strategy
+          if (MACRO_SANDBOX.allowedStrategies.includes('INTRADAY')) {
+            placeSandboxTrade(
+              MACRO_SANDBOX,
+              signal.symbol,
+              directionMapped,
+              signal.recommended_qty ?? 1,
+              signal.entry_price,
+              'INTRADAY',
+              signal.confidence,
+              15,
+              signal.regime,
+              signal.stop_loss,
+              signal.take_profit
+            );
+          }
+        } catch (err: any) {
+          console.warn('[LiveMarket] Sandbox auto-route error:', err.message);
+        }
 
         // Dispatch to SSE clients
         sseClients.forEach(res => {
