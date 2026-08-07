@@ -61,16 +61,7 @@ const IP_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 export async function getPublicIp(): Promise<string> {
   if (process.env.ANGELONE_STATIC_IP) return process.env.ANGELONE_STATIC_IP.trim();
   if (process.env.SMARTAPI_STATIC_IP) return process.env.SMARTAPI_STATIC_IP.trim();
-  if (_cachedIp && Date.now() - _ipCachedAt < IP_CACHE_TTL) return _cachedIp;
-  try {
-    const { data } = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 });
-    if (data?.ip) {
-      _cachedIp = data.ip;
-      _ipCachedAt = Date.now();
-      return _cachedIp;
-    }
-  } catch {}
-  return _cachedIp || '106.192.112.74';
+  return '152.55.177.44';
 }
 
 // ── JWT Token Cache ────────────────────────────────────────────────────────────
