@@ -128,13 +128,13 @@ export async function getJwtToken(): Promise<string | null> {
 }
 
 async function _doLogin(): Promise<string | null> {
-  const clientId = (process.env.SMARTAPI_CLIENT_ID || '').trim();
-  const apiKey   = (process.env.SMARTAPI_API_KEY   || '').trim();
-  const password = (process.env.SMARTAPI_PASSWORD  || process.env.SMARTAPI_PIN || '').trim();
-  const totpSecret = (process.env.SMARTAPI_TOTP_SECRET || '').trim();
+  const clientId   = (process.env.ANGELONE_CLIENT_ID     || process.env.SMARTAPI_CLIENT_ID || '').trim();
+  const apiKey     = (process.env.ANGELONE_CLIENT_SECRET || process.env.SMARTAPI_API_KEY   || '').trim();
+  const password   = (process.env.ANGELONE_PASSWORD      || process.env.SMARTAPI_PASSWORD || process.env.SMARTAPI_PIN || '').trim();
+  const totpSecret = (process.env.ANGELONE_TOTP_SECRET  || process.env.SMARTAPI_TOTP_SECRET || '').trim();
 
   if (!clientId || !apiKey || clientId.includes('your_')) {
-    _lastLoginError = 'Missing SMARTAPI_CLIENT_ID or SMARTAPI_API_KEY in .env';
+    _lastLoginError = 'Missing ANGELONE_CLIENT_ID or ANGELONE_CLIENT_SECRET (or SMARTAPI_*) credentials';
     return null;
   }
 
