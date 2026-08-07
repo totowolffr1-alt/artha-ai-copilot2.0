@@ -498,6 +498,32 @@ You can ask me:
   };
 }
 
+// Helper: extract NSE stock symbols from user message text
+function extractStockSymbols(message: string): string[] {
+  // Match ALL-CAPS words 2–12 chars that look like NSE tickers
+  const capMatches = message.match(/\b[A-Z][A-Z0-9]{1,11}\b/g) || [];
+  // Also catch mixed-case common stock names typed by users
+  const knownMap: Record<string, string> = {
+    yesbank: 'YESBANK', reliance: 'RELIANCE', tcs: 'TCS', infy: 'INFY',
+    wipro: 'WIPRO', hdfc: 'HDFCBANK', hdfcbank: 'HDFCBANK', sbi: 'SBIN',
+    sbin: 'SBIN', tatasteel: 'TATASTEEL', tatamotors: 'TATAMOTORS',
+    bajfinance: 'BAJFINANCE', bajajfinance: 'BAJFINANCE', adani: 'ADANIENT',
+    zomato: 'ZOMATO', cupid: 'CUPID', nifty: '', sensex: '',
+    icicibank: 'ICICIBANK', axisbank: 'AXISBANK', kotak: 'KOTAKBANK',
+    ltim: 'LTIM', hcltech: 'HCLTECH', sunpharma: 'SUNPHARMA',
+    nestleind: 'NESTLEIND', maruti: 'MARUTI', titan: 'TITAN',
+  };
+  const lower = message.toLowerCase();
+  const fromKnown = Object.keys(knownMap)
+    .filter(k => lower.includes(k) && knownMap[k])
+    .map(k => knownMap[k]);
+
+  const combined = [...new Set([...capMatches, ...fromKnown])].filter(s =>
+    s.length >= 2 && !['I', 'A', 'THE', 'AND', 'FOR', 'BUY', 'SELL'].includes(s)
+  );
+  return combined;
+}
+
 export async function runAgentChat(userMessage: string): Promise<{ reply: string; suggestions: AgentSuggestion[]; toolsUsed: string[] }> {
   const groqKey = (process.env.GROQ_API_KEY || '').trim();
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
@@ -508,9 +534,31 @@ export async function runAgentChat(userMessage: string): Promise<{ reply: string
       const groq = new Groq({ apiKey: groqKey });
       const modelName = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
+      // ── Pre-fetch live prices for any stocks mentioned in the user message ──
+      // This ensures Groq LLaMA has REAL prices even for stocks not in the tick cache
+      const mentionedSymbols = extractStockSymbols(userMessage);
+      const preFetchedPrices: string[] = [];
+      const toolsUsed: string[] = ['🤖 Groq (LLaMA 3.3 70B)'];
+
+      await Promise.allSettled(mentionedSymbols.map(async (sym) => {
+        try {
+          const priceRaw = await executeTool('get_live_price', { symbol: sym });
+          const priceObj = JSON.parse(priceRaw);
+          if (priceObj.price && priceObj.price > 0) {
+            preFetchedPrices.push(`${sym}: ₹${priceObj.price} (${priceObj.changePercent >= 0 ? '+' : ''}${priceObj.changePercent}%)`);
+            toolsUsed.push(`📈 Fetched live price for ${sym}`);
+          }
+        } catch { /* skip symbol if fetch fails */ }
+      }));
+
+      // Inject pre-fetched prices into a supplemental system message
+      const extraContext = preFetchedPrices.length > 0
+        ? `\n\n⚡ LIVE PRICES FETCHED FOR THIS QUERY:\n${preFetchedPrices.join('\n')}\n\nUse these EXACT prices in your response. Do NOT say the price is unavailable.`
+        : '';
+
       const completion = await groq.chat.completions.create({
         messages: [
-          { role: 'system', content: buildAgentSystemPrompt() },
+          { role: 'system', content: buildAgentSystemPrompt() + extraContext },
           { role: 'user', content: userMessage },
         ],
         model: modelName,
@@ -519,7 +567,7 @@ export async function runAgentChat(userMessage: string): Promise<{ reply: string
 
       const replyText = completion.choices[0]?.message?.content || '';
       const suggestions = parseSuggestions(replyText);
-      return { reply: replyText, suggestions, toolsUsed: ['🤖 Groq (LLaMA 3.3 70B)'] };
+      return { reply: replyText, suggestions, toolsUsed };
     } catch (err: any) {
       console.error('[AgentService] Groq SDK Error, falling back to smart tool engine:', err?.message ?? err);
       return handleSmartFallbackResponse(userMessage);
