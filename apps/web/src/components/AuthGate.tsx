@@ -270,6 +270,53 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // ── Keyboard & Physical Desktop Numpad Listener ────────────────────────────
+  useEffect(() => {
+    const isPinScreen = ['lock-pin', 'setup-pin-enter', 'setup-pin-confirm'].includes(screen);
+    if (!isPinScreen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing inside standard inputs or textareas
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      let digit = '';
+
+      // Physical Numpad keys (Numpad0..Numpad9) and top row numbers ('0'..'9')
+      if (e.code >= 'Numpad0' && e.code <= 'Numpad9') {
+        digit = e.code.replace('Numpad', '');
+      } else if (e.key >= '0' && e.key <= '9') {
+        digit = e.key;
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        digit = 'DEL';
+      } else if (e.key === 'Enter' || e.code === 'NumpadEnter') {
+        e.preventDefault();
+        if (screen === 'lock-pin') {
+          handlePinUnlock();
+        } else if (screen === 'setup-pin-enter') {
+          if (pin.length >= 4) {
+            setError('');
+            setScreen('setup-pin-confirm');
+          }
+        } else if (screen === 'setup-pin-confirm') {
+          handlePinSetupConfirm();
+        }
+        return;
+      }
+
+      if (digit) {
+        e.preventDefault();
+        if (screen === 'lock-pin' || screen === 'setup-pin-enter') {
+          pressDigit(setPin, pin, digit);
+        } else if (screen === 'setup-pin-confirm') {
+          pressDigit(setConfirmPin, confirmPin, digit);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [screen, pin, confirmPin]);
+
   // ── Numpad ───────────────────────────────────────────────────────────────────
   function pressDigit(setter: React.Dispatch<React.SetStateAction<string>>, current: string, digit: string) {
     setError('');
