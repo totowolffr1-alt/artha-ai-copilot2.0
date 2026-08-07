@@ -44,6 +44,7 @@ const FIELD_LABELS: Record<string, string> = {
   ANGELONE_CLIENT_SECRET:  'Angel One API Key (SmartAPI Key)',
   ANGELONE_PASSWORD:       'Angel One PIN / Password',
   ANGELONE_TOTP_SECRET:    'Angel One TOTP Secret Key (from Authenticator)',
+  ANGELONE_STATIC_IP:       'Angel One Registered Static IP (e.g. 152.55.177.44)',
 
   UPSTOX_ACCESS_TOKEN:     'Upstox Access Token',
   UPSTOX_API_KEY:          'Upstox API Key',
