@@ -111,23 +111,6 @@ export class AngelOneBrokerAdapter implements IBrokerAdapter {
     const symbolToken = await this.resolveSymbolToken(request.symbol_id, token);
     const body = AngelOneOrderMapper.mapToAngelOne(request, symbolToken);
 
-    if (token === 'offline-session-fallback' || token.startsWith('simulated-')) {
-      // Offline fallback: Return mock successful broker response
-      console.log(`[AngelOneAdapter] Simulated Place Order for ${request.symbol_id} - Qty: ${request.qty}`);
-      return {
-        response_id: `resp-${Math.random().toString(36).substring(2, 11)}`,
-        order_request_id: request.order_request_id,
-        broker_order_id: `brk-${Math.random().toString(36).substring(2, 11)}`,
-        raw_status: 'SUCCESS',
-        normalized_status: 'OPEN',
-        reject_reason: null,
-        retryable: false,
-        latency_ms: Date.now() - startTime,
-        received_at: new Date(),
-        raw_payload: { variety: body.variety, tradingsymbol: body.tradingsymbol }
-      };
-    }
-
     try {
       const clientIp = (process.env.ANGELONE_STATIC_IP || process.env.SMARTAPI_STATIC_IP || '13.57.136.86').trim();
       const res = await fetch('https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/placeOrder', {

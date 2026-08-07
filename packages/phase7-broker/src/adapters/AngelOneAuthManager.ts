@@ -77,13 +77,12 @@ export class AngelOneAuthManager {
         this.jwtToken = data.data.jwtToken;
         this.tokenExpiry = Date.now() + 2 * 60 * 60 * 1000; // expires in 2 hours
       } else {
-        throw new Error(data.message || 'Invalid API response format during login');
+        throw new Error(data.message || 'Invalid API credentials or response format during login');
       }
     } catch (err: any) {
       console.error('[AngelOneAuth] Error during login:', err.message);
-      // Fallback to offline mode instead of crashing the process
-      this.jwtToken = 'offline-session-fallback';
-      this.tokenExpiry = Date.now() + 5 * 60 * 1000; // retry soon
+      this.jwtToken = null;
+      throw new Error(`Angel One Auth Failed: ${err.message}`);
     }
   }
 
