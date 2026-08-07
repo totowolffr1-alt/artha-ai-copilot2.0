@@ -45,19 +45,8 @@ tradingRouter.post('/orders', async (req: Request, res: Response) => {
 
   try {
     const brokerResponse = await adapter.placeOrder(orderRequest);
-    let success = brokerResponse.normalized_status === 'OPEN' || brokerResponse.normalized_status === 'FILLED';
+    const success = brokerResponse.normalized_status === 'OPEN' || brokerResponse.normalized_status === 'FILLED';
     const payload = brokerResponse.raw_payload ?? {};
-    const ipWhitelistRequired = !!payload.ipWhitelistRequired || (brokerResponse.reject_reason || '').includes('registered IP');
-
-    // ── Smart Cloud IP Fallback ─────────────────────────────────────────────
-    // If running on cloud host (Railway/Vercel) and Angel One blocks dynamic cloud IP,
-    // automatically fallback to Live Execution Simulation so the user experience is smooth.
-    let isFallback = false;
-    if (!success && ipWhitelistRequired) {
-      success = true;
-      isFallback = true;
-      console.log(`[Trading] ⚡ Cloud IP whitelisting pending (${payload.serverIp}). Executed via Live Simulation.`);
-    }
 
     const record = {
       order_request_id: orderId,
@@ -67,20 +56,20 @@ tradingRouter.post('/orders', async (req: Request, res: Response) => {
       price: orderRequest.price || null,
       order_type: orderRequest.order_type,
       product_type: orderRequest.product_type === 'MIS' ? 'INTRADAY' : 'DELIVERY',
-      broker_order_id: brokerResponse.broker_order_id || `sim-${orderId}`,
+      broker_order_id: brokerResponse.broker_order_id || null,
       status: success ? 'OPEN' : 'REJECTED',
-      reject_reason: isFallback ? 'Executed via Live Simulation (Angel One Cloud IP Pending)' : brokerResponse.reject_reason,
+      reject_reason: brokerResponse.reject_reason || null,
       executed_at: new Date().toISOString(),
     };
 
     orderStore.set(orderId, record);
-    console.log(`[Trading] Order ${record.status} via ${provider}: ${record.direction} ${record.qty} ${record.symbol} @ ${record.price || 'MARKET'}`);
+    console.log(`[Trading] Order ${record.status} via ${provider}: ${record.direction} ${record.qty} ${record.symbol} @ ${record.price || 'MARKET'} | Reason: ${record.reject_reason || 'OK'}`);
 
     return res.json({
-      success: true,
+      success,
       order: record,
-      isFallback,
-      message: isFallback ? `Order Executed via Live Simulation (Cloud IP ${payload.serverIp || 'rotating'} active)` : 'Order Placed Successfully',
+      message: success ? 'Order Placed Directly on Angel One' : (brokerResponse.reject_reason || 'Order rejected by broker'),
+      raw_payload: payload,
     });
   } catch (err: any) {
     const errMsg: string = err?.message || '';
