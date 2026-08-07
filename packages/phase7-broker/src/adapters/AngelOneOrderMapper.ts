@@ -19,6 +19,20 @@ export interface AngelOneOrderBody {
   quantity: string;
 }
 
+function isMarketClosedIST(): boolean {
+  try {
+    const now = new Date();
+    const istString = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const istDate = new Date(istString);
+    const day = istDate.getDay(); // 0 = Sun, 6 = Sat
+    const timeInMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+
+    if (day === 0 || day === 6) return true;
+    if (timeInMinutes < 555 || timeInMinutes >= 930) return true; // Outside 9:15 AM - 3:30 PM
+  } catch {}
+  return false;
+}
+
 export class AngelOneOrderMapper {
   /**
    * Maps internal OrderRequest structure to Angel One API payload.
@@ -36,9 +50,14 @@ export class AngelOneOrderMapper {
     if (req.product_type === 'CNC') producttype = 'DELIVERY';
     if (req.product_type === 'NRML') producttype = 'CARRYFORWARD';
 
-    // variety: SL order uses STOPLOSS variety, standard order uses NORMAL variety
-    const variety: AngelOneOrderBody['variety'] = 
-      (req.order_type === 'SL' || req.order_type === 'SL-M') ? 'STOPLOSS' : 'NORMAL';
+    // variety: SL order uses STOPLOSS variety; outside market hours uses AMO variety
+    const isClosed = isMarketClosedIST();
+    let variety: AngelOneOrderBody['variety'] = 'NORMAL';
+    if (req.order_type === 'SL' || req.order_type === 'SL-M') {
+      variety = 'STOPLOSS';
+    } else if (isClosed) {
+      variety = 'AMO';
+    }
 
     return {
       variety,
