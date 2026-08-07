@@ -216,7 +216,7 @@ export function invalidateHoldingsCache(): void {
 
 /** Returns the standard Angel One API headers for authenticated requests. */
 export async function getApiHeaders(): Promise<Record<string, string>> {
-  const apiKey   = (process.env.SMARTAPI_API_KEY || '').trim();
+  const apiKey   = (process.env.ANGELONE_CLIENT_SECRET || process.env.SMARTAPI_API_KEY || '').trim();
   const clientIp = await getPublicIp();
   const token    = await getJwtToken();
 
