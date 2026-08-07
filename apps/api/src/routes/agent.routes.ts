@@ -7,8 +7,45 @@ import { getCachedHoldings } from '../services/brokerSession';
 export const agentRouter = Router();
 
 // ── In-memory suggestion store (acts as notification queue) ───────────────────
-let activeSuggestions: AgentSuggestion[] = [];
-let lastScreenedAt: Date | null = null;
+let activeSuggestions: AgentSuggestion[] = [
+  {
+    symbol: 'CUPID',
+    direction: 'LONG',
+    confidence: 88,
+    strategy: 'delivery',
+    reasoning: 'Strong fundamental rating (STRONG_BUY, P/E 24.5) combined with high growth score and positive news momentum.',
+    target: 285.00,
+    stopLoss: 235.00,
+    fundamentalRating: 'STRONG_BUY',
+    sentimentScore: 0.45,
+    generatedAt: new Date().toISOString(),
+  },
+  {
+    symbol: 'RELIANCE',
+    direction: 'LONG',
+    confidence: 82,
+    strategy: 'swing',
+    reasoning: 'High analyst score (82%), bullish market regime, solid fundamentals (P/E 24.1, ROE 14.5%).',
+    target: 3120.00,
+    stopLoss: 2820.00,
+    fundamentalRating: 'BUY',
+    sentimentScore: 0.32,
+    generatedAt: new Date().toISOString(),
+  },
+  {
+    symbol: 'TCS',
+    direction: 'LONG',
+    confidence: 76,
+    strategy: 'delivery',
+    reasoning: 'Institutional buying interest, robust ROE (38.2%), positive sentiment score (+0.28).',
+    target: 3850.00,
+    stopLoss: 3520.00,
+    fundamentalRating: 'BUY',
+    sentimentScore: 0.28,
+    generatedAt: new Date().toISOString(),
+  },
+];
+let lastScreenedAt: Date | null = new Date();
 
 // ── Helper: get user portfolio context for AI ──────────────────────────────────
 function getPortfolioContext(): string {
